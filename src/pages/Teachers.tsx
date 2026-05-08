@@ -1,0 +1,452 @@
+import React, { useState, useEffect } from 'react';
+import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { Teacher, Grade } from '../types';
+import { Button, Input, Card } from '../components/ui';
+import { Modal } from '../components/Modal';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { Plus, Edit2, Trash2, UserSquare2, Loader2, Phone, BookOpen, ImageIcon, Check } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+export function Teachers() {
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
+  const [currentTeacher, setCurrentTeacher] = useState<Teacher | null>(null);
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    phone: '', 
+    subject: '', 
+    notes: '',
+    photoURL: '',
+    gradeIds: [] as string[],
+    bio: '',
+    experience: '',
+    socialLinks: {
+      facebook: '',
+      twitter: '',
+      instagram: '',
+      youtube: ''
+    }
+  });
+
+  useEffect(() => {
+    const unsubTeachers = onSnapshot(query(collection(db, 'teachers'), orderBy('createdAt', 'desc')), (snapshot) => {
+      const allTeachers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Teacher));
+      
+      const uniqueTeachers: Teacher[] = [];
+      const seenNames = new Set<string>();
+      const duplicatesToDelete: string[] = [];
+
+      allTeachers.forEach(t => {
+        const nameNormalized = t.name.trim();
+        if (seenNames.has(nameNormalized)) {
+          duplicatesToDelete.push(t.id);
+        } else {
+          seenNames.add(nameNormalized);
+          uniqueTeachers.push(t);
+        }
+      });
+
+      if (duplicatesToDelete.length > 0) {
+        duplicatesToDelete.forEach(async (id) => {
+          try {
+            await deleteDoc(doc(db, 'teachers', id));
+          } catch (e) {
+            console.error('Error deleting duplicate:', e);
+          }
+        });
+      }
+
+      setTeachers(uniqueTeachers);
+    });
+
+    const unsubGrades = onSnapshot(query(collection(db, 'grades'), orderBy('name')), (snapshot) => {
+      setGrades(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Grade)));
+      setLoading(false);
+    });
+
+    return () => {
+      unsubTeachers();
+      unsubGrades();
+    };
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim() || !formData.phone.trim() || !formData.subject.trim()) return;
+
+    try {
+      // Check for name duplicate before proceeding
+      const duplicate = teachers.find(t => 
+        t.name.trim() === formData.name.trim() && 
+        (!currentTeacher || t.id !== currentTeacher.id)
+      );
+
+      if (duplicate) {
+        toast.error('عذراً، هذا المعلم موجود بالفعل في القائمة');
+        return;
+      }
+
+      if (currentTeacher) {
+        await updateDoc(doc(db, 'teachers', currentTeacher.id), {
+          ...formData,
+          updatedAt: serverTimestamp(),
+        });
+        toast.success('تم تحديث بيانات المعلم بنجاح');
+      } else {
+        await addDoc(collection(db, 'teachers'), {
+          ...formData,
+          createdAt: serverTimestamp(),
+        });
+        toast.success('تم إضافة المعلم بنجاح');
+      }
+      closeModal();
+    } catch (error) {
+      console.error('Error saving teacher:', error);
+      handleFirestoreError(error, OperationType.WRITE, 'teachers');
+      toast.error('حدث خطأ أثناء الحفظ');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!currentTeacher) return;
+    try {
+      await deleteDoc(doc(db, 'teachers', currentTeacher.id));
+      toast.success('تم حذف المعلم بنجاح');
+      setIsConfirmOpen(false);
+      setCurrentTeacher(null);
+    } catch (error) {
+      toast.error('حدث خطأ أثناء الحذف');
+    }
+  };
+
+  const toggleGrade = (gradeId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      gradeIds: prev.gradeIds.includes(gradeId)
+        ? prev.gradeIds.filter(id => id !== gradeId)
+        : [...prev.gradeIds, gradeId]
+    }));
+  };
+
+  const openModal = (teacher?: Teacher) => {
+    if (teacher) {
+      setCurrentTeacher(teacher);
+      setFormData({ 
+        name: teacher.name, 
+        phone: teacher.phone, 
+        subject: teacher.subject, 
+        notes: teacher.notes || '',
+        photoURL: teacher.photoURL || '',
+        gradeIds: teacher.gradeIds || [],
+        bio: teacher.bio || '',
+        experience: teacher.experience || '',
+        socialLinks: {
+          facebook: teacher.socialLinks?.facebook || '',
+          twitter: teacher.socialLinks?.twitter || '',
+          instagram: teacher.socialLinks?.instagram || '',
+          youtube: teacher.socialLinks?.youtube || '',
+        }
+      });
+    } else {
+      setCurrentTeacher(null);
+      setFormData({ 
+        name: '', 
+        phone: '', 
+        subject: '', 
+        notes: '',
+        photoURL: '',
+        gradeIds: [],
+        bio: '',
+        experience: '',
+        socialLinks: {
+          facebook: '',
+          twitter: '',
+          instagram: '',
+          youtube: ''
+        }
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setCurrentTeacher(null);
+    setFormData({ 
+      name: '', 
+      phone: '', 
+      subject: '', 
+      notes: '', 
+      photoURL: '', 
+      gradeIds: [], 
+      bio: '', 
+      experience: '',
+      socialLinks: { facebook: '', twitter: '', instagram: '', youtube: '' }
+    });
+  };
+
+  const deleteAllTeachers = async () => {
+    try {
+      const deletePromises = teachers.map(t => deleteDoc(doc(db, 'teachers', t.id)));
+      await Promise.all(deletePromises);
+      toast.success('تم مسح جميع المعلمين بنجاح');
+      setIsDeleteAllConfirmOpen(false);
+    } catch (e) {
+      toast.error('حدث خطأ أثناء المسح');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900">المعلمون</h1>
+          <p className="text-gray-500">إدارة الكادر التدريسي في المركز</p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setIsDeleteAllConfirmOpen(true)} 
+            className="gap-2 rounded-xl border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700"
+          >
+            <Trash2 className="w-5 h-5" />
+            <span>مسح الكل</span>
+          </Button>
+          <Button onClick={() => openModal()} className="gap-2 rounded-xl">
+            <Plus className="w-5 h-5" />
+            <span>إضافة معلم</span>
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {teachers.length === 0 ? (
+          <div className="col-span-full py-20 text-center space-y-4">
+            <UserSquare2 className="mx-auto w-16 h-16 text-gray-200" />
+            <p className="text-gray-400">لا يوجد معلمون مضافون بعد</p>
+          </div>
+        ) : (
+          teachers.map((teacher) => (
+            <Card key={teacher.id} className="group hover:border-blue-200 transition-all duration-300 overflow-hidden">
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center font-bold text-xl overflow-hidden shadow-inner">
+                      {teacher.photoURL ? (
+                        <img src={teacher.photoURL} alt={teacher.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        teacher.name.charAt(0)
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-lg">{teacher.name}</h3>
+                      <div className="flex items-center gap-1 text-[#1a73e8] text-xs font-bold px-2 py-0.5 bg-blue-50 rounded-full w-fit">
+                        <BookOpen className="w-3 h-3" />
+                        <span>{teacher.subject}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => openModal(teacher)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setCurrentTeacher(teacher);
+                        setIsConfirmOpen(true);
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="space-y-3 pt-4 border-t border-gray-50">
+                  <div className="flex items-center gap-3 text-sm text-gray-600">
+                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400">
+                      <Phone className="w-4 h-4" />
+                    </div>
+                    <span className="font-medium">{teacher.phone}</span>
+                  </div>
+                  
+                  {teacher.gradeIds && teacher.gradeIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {teacher.gradeIds.map(gid => {
+                        const grade = grades.find(g => g.id === gid);
+                        return grade ? (
+                          <span key={gid} className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md">
+                            {grade.name}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+
+                  {teacher.notes && (
+                    <p className="text-xs text-gray-400 line-clamp-2 mt-2 leading-relaxed italic">
+                      " {teacher.notes} "
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={closeModal} 
+        title={currentTeacher ? 'تعديل بيانات المعلم' : 'إضافة معلم جديد'}
+        size="2xl"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="اسم المعلم"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+            />
+            <Input
+              label="رقم الهاتف"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="المادة"
+              value={formData.subject}
+              onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+              required
+            />
+            <Input
+              label="الخبرة (مثال: 10 سنوات خبرة)"
+              value={formData.experience}
+              onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="رابط الصورة (ImgBB)"
+              placeholder="https://i.ibb.co/..."
+              value={formData.photoURL}
+              onChange={(e) => setFormData({ ...formData, photoURL: e.target.value })}
+              icon={<ImageIcon className="w-4 h-4" />}
+            />
+          </div>
+
+          <div className="space-y-4 p-4 border border-blue-50 rounded-2xl bg-blue-50/30">
+            <h4 className="text-sm font-bold text-blue-900 border-b border-blue-100 pb-2">روابط التواصل الاجتماعي</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                label="فيسبوك"
+                value={formData.socialLinks.facebook}
+                onChange={(e) => setFormData({ ...formData, socialLinks: { ...formData.socialLinks, facebook: e.target.value } })}
+              />
+              <Input
+                label="إنستجرام"
+                value={formData.socialLinks.instagram}
+                onChange={(e) => setFormData({ ...formData, socialLinks: { ...formData.socialLinks, instagram: e.target.value } })}
+              />
+              <Input
+                label="تويتر"
+                value={formData.socialLinks.twitter}
+                onChange={(e) => setFormData({ ...formData, socialLinks: { ...formData.socialLinks, twitter: e.target.value } })}
+              />
+              <Input
+                label="يوتيوب"
+                value={formData.socialLinks.youtube}
+                onChange={(e) => setFormData({ ...formData, socialLinks: { ...formData.socialLinks, youtube: e.target.value } })}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-bold text-gray-700">النبذة التعريفية (Bio)</label>
+            <textarea
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a73e8] min-h-[100px] transition-all bg-white"
+              value={formData.bio}
+              placeholder="اكتب نبذة عن المعلم وطريقة تدريسه..."
+              onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-bold text-gray-700">الصفوف الدراسية</label>
+            <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
+              {grades.map(grade => (
+                <button
+                  key={grade.id}
+                  type="button"
+                  onClick={() => toggleGrade(grade.id)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    formData.gradeIds.includes(grade.id)
+                      ? 'bg-[#1a73e8] text-white shadow-md'
+                      : 'bg-white text-gray-500 border border-gray-200'
+                  }`}
+                >
+                  {formData.gradeIds.includes(grade.id) && <Check className="w-3 h-3" />}
+                  {grade.name}
+                </button>
+              ))}
+              {grades.length === 0 && <p className="text-[10px] text-gray-400">لا توجد صفوف مضافة</p>}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-gray-700">ملاحظات</label>
+            <textarea
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a73e8] min-h-[80px]"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button type="submit" className="flex-1 rounded-xl h-12">
+              {currentTeacher ? 'تحديث' : 'إضافة'}
+            </Button>
+            <Button type="button" variant="outline" onClick={closeModal} className="flex-1 rounded-xl h-12">
+              إلغاء
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmModal
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title="حذف المعلم"
+        message={`هل أنت متأكد من حذف المعلم "${currentTeacher?.name}"؟`}
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteAllConfirmOpen}
+        onClose={() => setIsDeleteAllConfirmOpen(false)}
+        onConfirm={deleteAllTeachers}
+        title="مسح جميع المعلمين"
+        message="هل أنت متأكد من مسح جميع المعلمين؟ لا يمكن التراجع عن هذا الإجراء."
+      />
+    </div>
+  );
+}

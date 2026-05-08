@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with PII isolated",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "staff"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Grade": {
+      "title": "Grade",
+      "description": "Educational levels (e.g., 1st Secondary)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Teacher profile",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "subject": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "gradeIds": { "type": "array", "items": { "type": "string" } },
+        "bio": { "type": "string" },
+        "experience": { "type": "string" },
+        "socialLinks": {
+          "type": "object",
+          "properties": {
+            "facebook": { "type": "string" },
+            "twitter": { "type": "string" },
+            "instagram": { "type": "string" },
+            "youtube": { "type": "string" }
+          }
+        },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "subject", "gradeIds"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "Class groups with grade, subject, and teacher",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "gradeId": { "type": "string" },
+        "subject": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "capacity": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "gradeId", "subject", "teacherId"]
+    },
+    "Schedule": {
+      "title": "Schedule",
+      "description": "Class timing and room allocation",
+      "type": "object",
+      "properties": {
+        "gradeId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "subject": { "type": "string" },
+        "day": { "type": "string", "enum": ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "isExam": { "type": "boolean" },
+        "room": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["gradeId", "groupId", "teacherId", "subject", "day", "startTime"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student profile and enrollment",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "parentPhone": { "type": "string" },
+        "gradeId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "gradeId"]
+    },
+    "AppSettings": {
+      "title": "App Settings",
+      "description": "Global application configuration",
+      "type": "object",
+      "properties": {
+        "systemName": { "type": "string" },
+        "systemDescription": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["systemName"]
+    }
+  },
+  "firestore": {
+    "users": { "schema": "User", "description": "Authenticated users" },
+    "grades": { "schema": "Grade", "description": "Educational grades" },
+    "teachers": { "schema": "Teacher", "description": "Teachers list" },
+    "groups": { "schema": "Group", "description": "Study groups" },
+    "schedules": { "schema": "Schedule", "description": "Weekly schedule" },
+    "students": { "schema": "Student", "description": "Students list" },
+    "settings": { "schema": "AppSettings", "description": "Global settings" }
+  }
+}

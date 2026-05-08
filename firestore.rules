@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Test connection doc
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // --- Helpers ---
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'canva40478@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Helpers ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['admin', 'staff', 'student'] &&
+             data.email == request.auth.token.email &&
+             (!('displayName' in data) || data.displayName is string) &&
+             (!('photoURL' in data) || data.photoURL is string);
+    }
+
+    function isValidGrade(data) {
+      return data.keys().hasAll(['name']) &&
+             data.name is string && data.name.size() > 0;
+    }
+
+    function isValidTeacher(data) {
+      return data.keys().hasAll(['name', 'phone', 'subject', 'gradeIds']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.phone is string &&
+             data.subject is string &&
+             data.gradeIds is list &&
+             (!('photoURL' in data) || data.photoURL is string) &&
+             (!('bio' in data) || data.bio is string) &&
+             (!('experience' in data) || data.experience is string) &&
+             (!('socialLinks' in data) || data.socialLinks is map);
+    }
+
+    function isValidGroup(data) {
+      return data.keys().hasAll(['name', 'gradeId', 'subject', 'teacherId']) &&
+             data.name is string &&
+             isValidId(data.gradeId) &&
+             isValidId(data.teacherId) &&
+             (!('capacity' in data) || (data.capacity is int && data.capacity > 0));
+    }
+
+    function isValidSchedule(data) {
+      return data.keys().hasAll(['gradeId', 'groupId', 'teacherId', 'subject', 'day', 'startTime']) &&
+             data.day in ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] &&
+             data.startTime is string &&
+             (!('endTime' in data) || data.endTime is string) &&
+             (!('isExam' in data) || data.isExam is bool);
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['name', 'phone', 'gradeId']) &&
+             data.name is string &&
+             data.phone is string &&
+             isValidId(data.gradeId);
+    }
+
+    // --- Match Rules ---
+
+    // Users collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && 
+                    isValidUser(incoming()) &&
+                    (incoming().role != 'admin' || request.auth.token.email == 'canva40478@gmail.com');
+      allow update: if isSignedIn() && request.auth.uid == userId && 
+                    isValidUser(incoming()) &&
+                    (
+                      incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']) ||
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']) && request.auth.token.email == 'canva40478@gmail.com')
+                    );
+      allow delete: if false; 
+    }
+
+    // Grades collection
+    match /grades/{gradeId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidGrade(incoming());
+      allow update: if isAdmin() && isValidGrade(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Teachers collection
+    match /teachers/{teacherId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidTeacher(incoming());
+      allow update: if isAdmin() && isValidTeacher(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Groups collection
+    match /groups/{groupId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidGroup(incoming()) && 
+                    exists(/databases/$(database)/documents/grades/$(incoming().gradeId)) &&
+                    exists(/databases/$(database)/documents/teachers/$(incoming().teacherId));
+      allow update: if isAdmin() && isValidGroup(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Schedules collection
+    match /schedules/{scheduleId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidSchedule(incoming()) &&
+                    exists(/databases/$(database)/documents/groups/$(incoming().groupId));
+      allow update: if isAdmin() && isValidSchedule(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Students collection
+    match /students/{studentId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidStudent(incoming());
+      allow update: if isAdmin() && isValidStudent(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Settings collection
+    match /settings/{settingId} {
+      allow read: if true; // Publicly readable for login screen
+      allow write: if isAdmin();
+    }
+  }
+}
