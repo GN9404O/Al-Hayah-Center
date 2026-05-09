@@ -1,12 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Navigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { Grade } from '../types';
 
 export function Register() {
   const { user, login, loading } = useAuth();
   const { settings } = useSettings();
+  const [grades, setGrades] = useState<Grade[]>([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'grades'), (snapshot) => {
+      setGrades(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Grade)));
+    });
+    return unsub;
+  }, []);
 
   if (user) {
     return <Navigate to="/" replace />;

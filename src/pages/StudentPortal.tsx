@@ -48,8 +48,11 @@ export function StudentPortal() {
 
   // Initial data fetch
   useEffect(() => {
-    const unsubGrades = onSnapshot(query(collection(db, 'grades'), orderBy('name')), (snapshot) => {
-      const gradesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Grade));
+    // Using simple collection fetch to ensure responsiveness, ordering in JS if needed
+    const unsubGrades = onSnapshot(collection(db, 'grades'), (snapshot) => {
+      const gradesData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Grade))
+        .sort((a, b) => a.name.localeCompare(b.name));
       setGrades(gradesData);
       setLoading(false);
     });
@@ -269,7 +272,7 @@ export function StudentPortal() {
               <input
                 name="name"
                 type="text"
-                defaultValue={studentProfile.name || user?.displayName || ''}
+                defaultValue={studentProfile?.name || user?.displayName || ''}
                 required
                 className="w-full h-14 bg-gray-50 border-none rounded-2xl px-6 focus:ring-2 focus:ring-[#1a73e8] font-medium"
                 placeholder="أدخل اسمك الثلاثي"
