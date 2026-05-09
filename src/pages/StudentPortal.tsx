@@ -20,22 +20,8 @@ export function StudentPortal() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   
-  // Robust initialization from localStorage
-  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('edu_center_grade_id');
-    } catch {
-      return null;
-    }
-  });
-  
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('edu_center_stage_id');
-    } catch {
-      return null;
-    }
-  });
+  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
 
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -51,22 +37,7 @@ export function StudentPortal() {
     logout();
   };
 
-  // Synchronization of selection to localStorage
-  useEffect(() => {
-    if (selectedGradeId) {
-      localStorage.setItem('edu_center_grade_id', selectedGradeId);
-    } else {
-      localStorage.removeItem('edu_center_grade_id');
-    }
-  }, [selectedGradeId]);
 
-  useEffect(() => {
-    if (selectedStageId) {
-      localStorage.setItem('edu_center_stage_id', selectedStageId);
-    } else {
-      localStorage.removeItem('edu_center_stage_id');
-    }
-  }, [selectedStageId]);
 
   // Fetch student profile
   useEffect(() => {
@@ -78,14 +49,6 @@ export function StudentPortal() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setStudentProfile({ id: docSnap.id, ...data });
-        if (data.gradeId) {
-          setSelectedGradeId(data.gradeId);
-          // Auto-infer stage if missing
-          const stage = ACADEMIC_STAGES.find(s => s.grades.some(g => g.id === data.gradeId));
-          if (stage) {
-            setSelectedStageId(stage.id);
-          }
-        }
       } else {
         setStudentProfile(null);
       }
