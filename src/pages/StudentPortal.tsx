@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
+import { cn } from '../components/ui';
 
 import { updateProfile } from 'firebase/auth';
 

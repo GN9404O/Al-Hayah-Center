@@ -172,6 +172,7 @@ export function Settings() {
             ].filter(i => !i.hidden).map((item) => (
               <button
                 key={item.id}
+                type="button"
                 disabled={(item as any).disabled}
                 onClick={() => setActiveTab(item.id as any)}
                 className={cn(
@@ -295,6 +296,7 @@ export function Settings() {
                   <p className="text-sm text-gray-500">إظهار رسائل تحذيرية أو تنبيهات لجميع الطلاب</p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setAlertsEnabled(!alertsEnabled)}
                   className={cn(
                     "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
