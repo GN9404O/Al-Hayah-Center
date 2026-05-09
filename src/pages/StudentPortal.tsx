@@ -19,8 +19,24 @@ export function StudentPortal() {
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(localStorage.getItem('edu_center_grade_id'));
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(localStorage.getItem('edu_center_stage_id'));
+  
+  // Robust initialization from localStorage
+  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('edu_center_grade_id');
+    } catch {
+      return null;
+    }
+  });
+  
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('edu_center_stage_id');
+    } catch {
+      return null;
+    }
+  });
+
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -35,7 +51,7 @@ export function StudentPortal() {
     logout();
   };
 
-  // Sync selection with localStorage
+  // Synchronization of selection to localStorage
   useEffect(() => {
     if (selectedGradeId) {
       localStorage.setItem('edu_center_grade_id', selectedGradeId);
@@ -64,6 +80,11 @@ export function StudentPortal() {
         setStudentProfile({ id: docSnap.id, ...data });
         if (data.gradeId) {
           setSelectedGradeId(data.gradeId);
+          // Auto-infer stage if missing
+          const stage = ACADEMIC_STAGES.find(s => s.grades.some(g => g.id === data.gradeId));
+          if (stage) {
+            setSelectedStageId(stage.id);
+          }
         }
       } else {
         setStudentProfile(null);
@@ -101,10 +122,13 @@ export function StudentPortal() {
 
   // Fetch contextual data when grade is selected
   useEffect(() => {
-    if (!selectedGradeId) {
-      setSchedules([]);
-      setGroups([]);
-      setIsDataInitialized(true);
+    // Only proceed if grade is set AND profile is fully resolved (to avoid auth/profile race)
+    if (!selectedGradeId || !isProfileLoaded) {
+      if (!selectedGradeId) {
+        setSchedules([]);
+        setGroups([]);
+        setIsDataInitialized(true);
+      }
       return;
     }
 
@@ -127,7 +151,6 @@ export function StudentPortal() {
       (snapshot) => {
         const groupsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Group));
         setGroups(groupsData);
-        // Default to the first available subject
         if (groupsData.length > 0 && !selectedSubject) {
           setSelectedSubject(groupsData[0].subject);
         }
@@ -141,7 +164,7 @@ export function StudentPortal() {
       unsubSchedules();
       unsubGroups();
     };
-  }, [selectedGradeId]);
+  }, [selectedGradeId, isProfileLoaded]);
 
   const subjects = useMemo(() => {
     if (!selectedGradeId) return [];
