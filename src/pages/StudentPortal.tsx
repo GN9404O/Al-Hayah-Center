@@ -25,6 +25,7 @@ export function StudentPortal() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDataInitialized, setIsDataInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'schedule' | 'subjects' | 'account'>('home');
   const [selectedTeacherProfile, setSelectedTeacherProfile] = useState<Teacher | null>(null);
 
@@ -81,10 +82,15 @@ export function StudentPortal() {
         .sort((a, b) => a.name.localeCompare(b.name));
       setGrades(gradesData);
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching grades:", error);
+      setLoading(false);
     });
 
     const unsubTeachers = onSnapshot(collection(db, 'teachers'), (snapshot) => {
       setTeachers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Teacher)));
+    }, (error) => {
+      console.error("Error fetching teachers:", error);
     });
 
     return () => {
@@ -98,13 +104,21 @@ export function StudentPortal() {
     if (!selectedGradeId) {
       setSchedules([]);
       setGroups([]);
+      setIsDataInitialized(true);
       return;
     }
+
+    setIsDataInitialized(false);
 
     const unsubSchedules = onSnapshot(
       query(collection(db, 'schedules'), where('gradeId', '==', selectedGradeId)),
       (snapshot) => {
         setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
+        setIsDataInitialized(true);
+      },
+      (error) => {
+        console.error("Error fetching schedules:", error);
+        setIsDataInitialized(true);
       }
     );
 
@@ -117,6 +131,9 @@ export function StudentPortal() {
         if (groupsData.length > 0 && !selectedSubject) {
           setSelectedSubject(groupsData[0].subject);
         }
+      },
+      (error) => {
+        console.error("Error fetching groups:", error);
       }
     );
 
@@ -273,7 +290,7 @@ export function StudentPortal() {
 
   const todaySchedules = schedules.filter(s => s.day === getCurrentDay());
 
-  if (loading || !isProfileLoaded) {
+  if (loading || !isProfileLoaded || (selectedGradeId && !isDataInitialized)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f7f9ff]">
         <div className="w-12 h-12 border-4 border-[#1a73e8] border-t-transparent rounded-full animate-spin"></div>
