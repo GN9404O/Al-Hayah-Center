@@ -17,7 +17,11 @@ export function Settings() {
   const [whatsappCountryCode, setWhatsappCountryCode] = useState(settings?.whatsappCountryCode || '+20');
   const [loading, setLoading] = useState(false);
   const [systemLoading, setSystemLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'system' | 'admins'>('profile');
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'system' | 'admins' | 'security'>('profile');
+
+  const [alertsEnabled, setAlertsEnabled] = useState(settings?.alertsEnabled || false);
+  const [alertsContent, setAlertsContent] = useState(settings?.alertsContent || '');
 
   const [adminEmails, setAdminEmails] = useState<{id: string, email: string, name: string}[]>([]);
   const [newAdminEmail, setNewAdminEmail] = useState('');
@@ -32,6 +36,8 @@ export function Settings() {
       setSystemDescription(settings.systemDescription || '');
       setWhatsappNumber(settings.whatsappNumber || '');
       setWhatsappCountryCode(settings.whatsappCountryCode || '+20');
+      setAlertsEnabled(settings.alertsEnabled || false);
+      setAlertsContent(settings.alertsContent || '');
     }
   }, [settings]);
 
@@ -129,6 +135,23 @@ export function Settings() {
     }
   };
 
+  const handleUpdateAlerts = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAlertsLoading(true);
+    try {
+      await updateDoc(doc(db, 'settings', 'app_config'), {
+        alertsEnabled,
+        alertsContent,
+        updatedAt: serverTimestamp()
+      });
+      toast.success('تم تحديث التنبيهات بنجاح');
+    } catch (error) {
+      toast.error('حدث خطأ أثناء تحديث التنبيهات');
+    } finally {
+      setAlertsLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
@@ -143,9 +166,9 @@ export function Settings() {
               { id: 'profile', label: 'الملف الشخصي', icon: UserIcon },
               { id: 'system', label: 'إعدادات النظام', icon: SettingsIcon },
               { id: 'admins', label: 'إدارة المشرفين', icon: Shield, hidden: !isSuperAdmin },
-              { id: 'security', label: 'الأمان', icon: Shield, disabled: true },
-              { id: 'notifications', label: 'الإشعارات', icon: Bell, disabled: true },
-              { id: 'language', label: 'اللغة', icon: Globe, disabled: true },
+              { id: 'security', label: 'التنبيهات الهامة', icon: Bell },
+              { id: 'notifications', label: 'الإشعارات', icon: Bell, disabled: true, hidden: true },
+              { id: 'language', label: 'اللغة', icon: Globe, disabled: true, hidden: true },
             ].filter(i => !i.hidden).map((item) => (
               <button
                 key={item.id}
@@ -258,6 +281,58 @@ export function Settings() {
                 <div className="flex justify-end pt-4">
                   <Button type="submit" disabled={systemLoading} className="px-8 rounded-xl h-12">
                     {systemLoading ? 'جاري الحفظ...' : 'حفظ إعدادات النظام'}
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          )}
+
+          {activeTab === 'security' && (
+            <Card className="p-8">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">تنبيهات المنصة الهامة</h3>
+                  <p className="text-sm text-gray-500">إظهار رسائل تحذيرية أو تنبيهات لجميع الطلاب</p>
+                </div>
+                <button
+                  onClick={() => setAlertsEnabled(!alertsEnabled)}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
+                    alertsEnabled ? "bg-red-600" : "bg-gray-200"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                      alertsEnabled ? "translate-x-6" : "translate-x-1"
+                    )}
+                  />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateAlerts} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">محتوى التنبيه (يدعم النص البسيط)</label>
+                  <textarea
+                    rows={5}
+                    value={alertsContent}
+                    onChange={(e) => setAlertsContent(e.target.value)}
+                    placeholder="مثال: نعتذر عن البدء المتأخر اليوم للمحاضرة الثالثة ثانوي لتكون الساعة 5:30 بدلاً من 4:00"
+                    className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-red-600 font-medium text-sm text-red-900 placeholder:text-gray-400"
+                  />
+                </div>
+
+                <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex gap-3 text-red-800">
+                  <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs leading-relaxed">
+                    عند تفعيل هذا الخيار، سيظهر التنبيه في أعلى لوحة تحكم الطالب بشكل بارز جداً. 
+                    يرجى التأكد من كتابة معلومات دقيقة وواضحة.
+                  </p>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                  <Button type="submit" disabled={alertsLoading} className="px-8 rounded-xl h-12 bg-red-600 hover:bg-red-700">
+                    {alertsLoading ? 'جاري الحفظ...' : 'حفظ ونشر التنبيه'}
                   </Button>
                 </div>
               </form>

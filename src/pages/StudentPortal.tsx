@@ -767,37 +767,68 @@ export function StudentPortal() {
 
                   {/* Move Sidebar content here for Home Tab */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
-                    {/* Important Alerts */}
-                    <motion.div 
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100"
-                    >
-                      <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                        <span className="material-symbols-outlined text-red-500">notifications_active</span>
-                        تنبيهات هامة
-                      </h3>
-                      <div className="space-y-4">
-                        <div className="flex gap-6 p-4 bg-red-50 rounded-2xl border border-red-100 hover:bg-red-100 transition-colors group cursor-default">
-                          <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-red-500 shadow-sm">
-                            <span className="material-symbols-outlined group-hover:scale-110 transition-transform">priority_high</span>
-                          </div>
-                          <div>
-                            <p className="text-base font-bold text-red-900">تسليم مشروع الفيزياء</p>
-                            <p className="text-sm text-red-600/70 font-medium tracking-tight">آخر موعد غداً الساعة 12:00 ظهراً</p>
+                    {/* Important Alerts - Dynamic from Settings matched to Image Shape */}
+                    {settings?.alertsEnabled && settings?.alertsContent && (
+                      <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-50 flex flex-col h-full"
+                      >
+                        <div className="flex items-center justify-between mb-8">
+                          <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-red-500 text-2xl">notifications_active</span>
+                            <h3 className="text-2xl font-black text-gray-900">تنبيهات هامة</h3>
                           </div>
                         </div>
-                        <div className="flex gap-6 p-4 bg-blue-50 rounded-2xl border border-blue-100 hover:bg-blue-100 transition-colors group cursor-default">
-                          <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
-                            <span className="material-symbols-outlined group-hover:scale-110 transition-transform">event</span>
-                          </div>
-                          <div>
-                            <p className="text-base font-bold text-blue-900">اختبار الكيمياء الشهري</p>
-                            <p className="text-sm text-blue-600/70 font-medium tracking-tight">الخميس القادم في القاعة الرئيسية</p>
-                          </div>
+                        
+                        <div className="space-y-4 flex-1">
+                          {settings.alertsContent.split('\n\n').filter(Boolean).map((alertBlock, idx) => {
+                            const lines = alertBlock.split('\n').filter(Boolean);
+                            const title = lines[0];
+                            const subtitle = lines.slice(1).join(' ');
+                            const isEven = idx % 2 === 0;
+                            
+                            return (
+                              <div 
+                                key={idx}
+                                className={cn(
+                                  "p-4 rounded-3xl border flex items-center justify-between transition-all hover:scale-[1.02] cursor-default",
+                                  isEven 
+                                    ? "bg-[#FFF5F5] border-[#FFEBEB]" 
+                                    : "bg-[#F0F7FF] border-[#E1EFFF]"
+                                )}
+                              >
+                                <div className="flex-1 px-4 text-left md:text-right">
+                                  <p className={cn(
+                                    "text-lg font-bold leading-tight",
+                                    isEven ? "text-[#4A0E0E]" : "text-[#0E2A4A]"
+                                  )}>
+                                    {title}
+                                  </p>
+                                  {subtitle && (
+                                    <p className={cn(
+                                      "text-sm mt-1 font-medium",
+                                      isEven ? "text-[#A66E6E]" : "text-[#6E86A6]"
+                                    )}>
+                                      {subtitle}
+                                    </p>
+                                  )}
+                                </div>
+                                
+                                <div className="w-14 h-14 bg-white rounded-2xl shadow-sm flex items-center justify-center flex-shrink-0">
+                                  <span className={cn(
+                                    "material-symbols-outlined text-2xl font-bold",
+                                    isEven ? "text-[#FF4B4B]" : "text-[#0066FF]"
+                                  )}>
+                                    {isEven ? 'priority_high' : 'calendar_month'}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
-                    </motion.div>
+                      </motion.div>
+                    )}
 
                     {/* Help Card */}
                     <motion.div 

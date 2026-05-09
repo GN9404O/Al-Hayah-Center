@@ -4,6 +4,8 @@ export interface AppSettings {
   systemDescription?: string;
   whatsappNumber?: string;
   whatsappCountryCode?: string;
+  alertsEnabled?: boolean;
+  alertsContent?: string;
   updatedAt: any;
 }
 
