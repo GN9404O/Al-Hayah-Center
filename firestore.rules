@@ -87,7 +87,7 @@ service cloud.firestore {
       return data.keys().hasAll(['name', 'phone', 'gradeId']) &&
              data.name is string &&
              data.phone is string &&
-             isValidId(data.gradeId);
+             (data.gradeId == "" || exists(/databases/$(database)/documents/grades/$(data.gradeId)));
     }
 
     // --- Match Rules ---
@@ -146,8 +146,8 @@ service cloud.firestore {
     // Students collection
     match /students/{studentId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidStudent(incoming());
-      allow update: if isAdmin() && isValidStudent(incoming());
+      allow create: if isSignedIn() && (request.auth.uid == studentId || isAdmin());
+      allow update: if isSignedIn() && (request.auth.uid == studentId || isAdmin());
       allow delete: if isAdmin();
     }
 

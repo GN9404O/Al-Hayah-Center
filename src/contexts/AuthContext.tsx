@@ -9,6 +9,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { User } from '../types';
+import toast from 'react-hot-toast';
 
 interface AuthContextType {
   user: User | null;
@@ -107,6 +108,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       console.error('Login error:', error);
+      
+      // Provide more helpful error message for users on custom domains
+      if (error.code === 'auth/unauthorized-domain') {
+        toast.error('هذا النطاق (Domain) غير مصرح له بتسجيل الدخول في Firebase. يرجى إضافته في إعدادات Authentication.');
+      } else {
+        toast.error('حدث خطأ أثناء تسجيل الدخول: ' + (error.message || 'خطأ غير معروف'));
+      }
+      
       throw error;
     } finally {
       setLoginLoading(false);

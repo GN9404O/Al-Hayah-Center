@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Grade, Schedule, Group, Teacher } from '../types';
 import { LogOut, Search, Clock, MapPin, Send, MessageSquare, AlertCircle, Facebook, Instagram, Twitter, Youtube, Phone, Info, Star, ShieldCheck, Mail, Share2, X } from 'lucide-react';
@@ -14,6 +14,7 @@ export function StudentPortal() {
   const { user, logout } = useAuth();
   const { settings } = useSettings();
   const [studentProfile, setStudentProfile] = useState<any>(null);
+  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
@@ -26,7 +27,10 @@ export function StudentPortal() {
 
   // Fetch student profile
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setIsProfileLoaded(true);
+      return;
+    }
     const unsub = onSnapshot(doc(db, 'students', user.uid), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -34,7 +38,10 @@ export function StudentPortal() {
         if (data.gradeId) {
           setSelectedGradeId(data.gradeId);
         }
+      } else {
+        setStudentProfile(null);
       }
+      setIsProfileLoaded(true);
     });
     return unsub;
   }, [user]);
@@ -171,6 +178,7 @@ export function StudentPortal() {
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 
+  // Handle Support Click
   const handleSupportClick = () => {
     if (!settings?.whatsappNumber) {
       toast.error('رقم الدعم غير متاح حالياً');
@@ -180,6 +188,14 @@ export function StudentPortal() {
     const message = encodeURIComponent('مرحباً، أحتاج إلى مساعدة بخصوص المنصة.');
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
+
+  // Mandatory Profile Check
+  const isProfileIncomplete = useMemo(() => {
+    if (user?.role !== 'student') return false;
+    if (!isProfileLoaded) return false;
+    if (!studentProfile) return true;
+    return !studentProfile.phone?.trim() || !studentProfile.parentPhone?.trim() || !studentProfile.gradeId;
+  }, [studentProfile, isProfileLoaded, user?.role]);
 
   const handleProfileComplete = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -198,13 +214,13 @@ export function StudentPortal() {
       setLoading(true);
       
       // Update Firestore
-      await updateDoc(doc(db, 'students', user!.uid), {
+      await setDoc(doc(db, 'students', user!.uid), {
         name,
         phone,
         parentPhone,
         gradeId,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
 
       // Update Auth Profile
       if (user) {
@@ -222,7 +238,7 @@ export function StudentPortal() {
 
   const todaySchedules = schedules.filter(s => s.day === getCurrentDay());
 
-  if (loading && !studentProfile) {
+  if (loading || !isProfileLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f7f9ff]">
         <div className="w-12 h-12 border-4 border-[#1a73e8] border-t-transparent rounded-full animate-spin"></div>
@@ -231,7 +247,7 @@ export function StudentPortal() {
   }
 
   // Mandatory Profile Completion Screen
-  if (studentProfile && (!studentProfile.phone || !studentProfile.parentPhone || !studentProfile.gradeId)) {
+  if (isProfileIncomplete) {
     return (
       <div className="min-h-screen bg-[#f7f9ff] flex items-center justify-center p-6" dir="rtl">
         <motion.div
