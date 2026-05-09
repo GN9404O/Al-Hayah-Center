@@ -305,16 +305,25 @@ export function StudentPortal() {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">الصف الدراسي</label>
+              <label className="block text-sm font-bold text-gray-700 mb-2">المرحلة الدراسية</label>
               <select
                 name="gradeId"
                 required
                 className="w-full h-14 bg-gray-50 border-none rounded-2xl px-6 focus:ring-2 focus:ring-[#1a73e8] font-bold"
               >
-                <option value="">اختر صفك الدراسي</option>
-                {grades.map(grade => (
-                  <option key={grade.id} value={grade.id}>{grade.name}</option>
-                ))}
+                <option value="">اختر مرحلتك الدراسية</option>
+                <option value="primary">ابتدائي</option>
+                <option value="preparatory">اعدادي</option>
+                <option value="secondary">ثانوي</option>
+                {grades.length > 0 && (
+                  <>
+                    <optgroup label="صفوف إضافية">
+                      {grades.map(grade => (
+                        <option key={grade.id} value={grade.id}>{grade.name}</option>
+                      ))}
+                    </optgroup>
+                  </>
+                )}
               </select>
             </div>
 
@@ -339,7 +348,7 @@ export function StudentPortal() {
     );
   }
 
-  // Step 1: Grade Selection Screen
+  // Step 1: Stage Selection Screen
   if (!selectedGradeId) {
     return (
       <div className="min-h-screen bg-[#f7f9ff] flex flex-col items-center justify-center p-6" dir="rtl">
@@ -350,11 +359,31 @@ export function StudentPortal() {
         >
           <div className="mb-12">
             <h1 className="text-4xl font-bold text-gray-900 mb-4">أهلاً بك في {settings?.systemName || 'إديو سنتر'}</h1>
-            <p className="text-lg text-gray-500 font-medium">يرجى اختيار الصف الدراسي لمتابعة دروسك</p>
+            <p className="text-lg text-gray-500 font-medium">يرجى اختيار المرحلة الدراسية لمتابعة دروسك</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {grades.map((grade, idx) => (
+            {[
+              { id: 'primary', name: 'المرحلة الابتدائية' },
+              { id: 'preparatory', name: 'المرحلة الاعدادية' },
+              { id: 'secondary', name: 'المرحلة الثانوية' }
+            ].map((stage, idx) => (
+              <button
+                key={stage.id}
+                onClick={() => setSelectedGradeId(stage.id)}
+                className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-transparent hover:border-[#1a73e8] hover:shadow-2xl hover:-translate-y-2 transition-all transition-duration-300 group relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform"></div>
+                <div className="relative z-10">
+                  <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-[#1a73e8] mx-auto mb-6 group-hover:bg-[#1a73e8] group-hover:text-white transition-all">
+                    <span className="material-symbols-outlined text-3xl">school</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900">{stage.name}</h3>
+                </div>
+              </button>
+            ))}
+            {/* Show any other grades if available and not one of the main stages */}
+            {grades.filter(g => !['primary', 'preparatory', 'secondary'].includes(g.id)).map((grade) => (
               <button
                 key={grade.id}
                 onClick={() => setSelectedGradeId(grade.id)}
@@ -363,7 +392,7 @@ export function StudentPortal() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform"></div>
                 <div className="relative z-10">
                   <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-[#1a73e8] mx-auto mb-6 group-hover:bg-[#1a73e8] group-hover:text-white transition-all">
-                    <span className="material-symbols-outlined text-3xl">school</span>
+                    <span className="material-symbols-outlined text-3xl">local_library</span>
                   </div>
                   <h3 className="text-xl font-bold text-gray-900">{grade.name}</h3>
                 </div>
@@ -908,14 +937,19 @@ export function StudentPortal() {
                     
                     <div className="w-full grid grid-cols-1 gap-4 max-w-sm">
                       <div className="p-4 bg-gray-50 rounded-xl flex items-center justify-between">
-                        <span className="text-sm text-gray-500 font-bold">الصف الدراسي</span>
-                        <span className="text-sm font-bold text-[#1a73e8]">{grades.find(g => g.id === selectedGradeId)?.name}</span>
+                        <span className="text-sm text-gray-500 font-bold">المرحلة الدراسية</span>
+                        <span className="text-sm font-bold text-[#1a73e8]">
+                          {grades.find(g => g.id === selectedGradeId)?.name || 
+                           (selectedGradeId === 'primary' ? 'المرحلة الابتدائية' : 
+                            selectedGradeId === 'preparatory' ? 'المرحلة الاعدادية' : 
+                            selectedGradeId === 'secondary' ? 'المرحلة الثانوية' : selectedGradeId)}
+                        </span>
                       </div>
                       <button 
                         onClick={() => setSelectedGradeId(null)}
                         className="w-full h-12 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-all font-bold text-sm"
                       >
-                        تغيير الصف الدراسي
+                        تغيير المرحلة الدراسية
                       </button>
                       <button 
                         onClick={logout}

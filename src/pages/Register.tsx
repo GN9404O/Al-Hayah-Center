@@ -88,6 +88,21 @@ export function Register() {
                 />
               </div>
 
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-gray-600 mb-2 px-1">المرحلة الدراسية</label>
+                <select 
+                  className="w-full bg-gray-50 border-none focus:ring-2 focus:ring-blue-600 focus:bg-white rounded-xl p-4 text-right transition-all font-bold"
+                >
+                  <option value="">اختر مرحلتك الدراسية</option>
+                  <option value="primary">ابتدائي</option>
+                  <option value="preparatory">اعدادي</option>
+                  <option value="secondary">ثانوي</option>
+                  {grades.map(grade => (
+                    <option key={grade.id} value={grade.id}>{grade.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <button 
                 className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg active:scale-[0.98] cursor-not-allowed opacity-50"
                 type="button"
