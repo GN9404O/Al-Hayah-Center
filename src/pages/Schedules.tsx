@@ -227,6 +227,7 @@ export function Schedules() {
       }
 
       let successCount = 0;
+      let errorCount = 0;
       
       // Phase 1: Pre-resolve all gradeIds and collect unique (day, gradeId) pairs
       const itemsToProcess = [];
@@ -234,17 +235,19 @@ export function Schedules() {
 
       for (const item of data) {
         // Flexible field mapping
-        const gName = String(item.gradeName || item.grade || item['المرحلة'] || item['اسم_المرحلة'] || '').trim();
+        let gName = String(item.gradeName || item.grade || item['المرحلة'] || item['اسم_المرحلة'] || '').trim();
         let gradeId = item.gradeId;
         
         if (!gradeId && gName) {
-          // Look in built-in stages first
+          // Normalize and look in built-in stages first
+          const normalizedGName = gName.replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
           let foundBuiltIn = false;
+          
           for (const stage of ACADEMIC_STAGES) {
-            const builtInGrade = stage.grades.find(g => 
-              g.name === gName || 
-              g.name.replace('أ', 'ا') === gName.replace('أ', 'ا')
-            );
+            const builtInGrade = stage.grades.find(g => {
+              const normalizedStageGrade = g.name.replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
+              return g.name === gName || normalizedStageGrade === normalizedGName;
+            });
             if (builtInGrade) {
               gradeId = builtInGrade.id;
               foundBuiltIn = true;
@@ -253,34 +256,50 @@ export function Schedules() {
           }
 
           if (!foundBuiltIn) {
-            const existingGrade = grades.find(g => g.name === gName);
+            const existingGrade = grades.find(g => {
+              const normalizedG = g.name.replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
+              return g.name === gName || normalizedG === normalizedGName;
+            });
+            
             if (existingGrade) {
               gradeId = existingGrade.id;
             } else if (localGradeMap.has(gName)) {
               gradeId = localGradeMap.get(gName);
             } else {
-              const newGradeRef = await addDoc(collection(db, 'grades'), {
-                name: gName,
-                createdAt: serverTimestamp(),
-              });
-              gradeId = newGradeRef.id;
-              localGradeMap.set(gName, gradeId);
+              try {
+                const newGradeRef = await addDoc(collection(db, 'grades'), {
+                  name: gName,
+                  createdAt: serverTimestamp(),
+                });
+                gradeId = newGradeRef.id;
+                localGradeMap.set(gName, gradeId);
+              } catch (e) {
+                console.error("Failed to create grade", gName, e);
+                errorCount++;
+                continue;
+              }
             }
           }
         }
 
         if (!gradeId) {
           console.warn("Skipping item: missing gradeId and gradeName", item);
+          errorCount++;
           continue;
         }
 
         // Map day to standard English labels
         let dayRaw = String(item.day || item['اليوم'] || '').trim();
-        const dayLabelAr = Object.entries(DAY_LABELS).find(([key, label]) => 
-          label === dayRaw || 
-          key.toLowerCase() === dayRaw.toLowerCase() ||
-          label.replace('أ', 'ا') === dayRaw.replace('أ', 'ا')
-        )?.[0];
+        const normalizedDayRaw = dayRaw.replace(/[أإآ]/g, 'ا');
+        
+        const dayLabelAr = Object.entries(DAY_LABELS).find(([key, label]) => {
+          const normalizedLabel = label.replace(/[أإآ]/g, 'ا');
+          return (
+            label === dayRaw || 
+            key.toLowerCase() === dayRaw.toLowerCase() ||
+            normalizedLabel === normalizedDayRaw
+          );
+        })?.[0];
         
         if (dayLabelAr) {
           const day = dayLabelAr;
@@ -288,14 +307,17 @@ export function Schedules() {
           itemsToProcess.push({ ...item, gradeId, resolvedDay: day });
         } else {
           console.warn("Skipping item: invalid day label", dayRaw, item);
+          errorCount++;
         }
       }
 
       // Phase 2: Cleanup existing schedules for the identified days/grades
-      const schedulesToDelete = schedules.filter(s => cleanupKeys.has(`${s.day}_${s.gradeId}`));
-      if (schedulesToDelete.length > 0) {
-        const deletePromises = schedulesToDelete.map(s => deleteDoc(doc(db, 'schedules', s.id)));
-        await Promise.all(deletePromises);
+      if (itemsToProcess.length > 0) {
+        const schedulesToDelete = schedules.filter(s => cleanupKeys.has(`${s.day}_${s.gradeId}`));
+        if (schedulesToDelete.length > 0) {
+          const deletePromises = schedulesToDelete.map(s => deleteDoc(doc(db, 'schedules', s.id)));
+          await Promise.all(deletePromises);
+        }
       }
 
       // Phase 3: Add new schedules
@@ -307,9 +329,20 @@ export function Schedules() {
           let teacherId = item.teacherId;
           
           if (!teacherId && tName) {
-            const existingTeacher = teachers.find(t => t.name === tName);
+            const normalizedTName = tName.replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
+            const existingTeacher = teachers.find(t => {
+              const normalizedEx = t.name.replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
+              return t.name === tName || normalizedEx === normalizedTName;
+            });
+
             if (existingTeacher) {
               teacherId = existingTeacher.id;
+              // Ensure grade is attached to teacher
+              if (!existingTeacher.gradeIds?.includes(gradeId)) {
+                await updateDoc(doc(db, 'teachers', teacherId), {
+                  gradeIds: [...(existingTeacher.gradeIds || []), gradeId]
+                });
+              }
             } else if (localTeacherMap.has(tName)) {
               teacherId = localTeacherMap.get(tName);
             } else {
@@ -352,15 +385,32 @@ export function Schedules() {
 
           // Ensure time format is HH:mm
           let startTime = String(item.startTime || item.start || item['وقت_البدء'] || item['البداية'] || '00:00').trim();
-          if (startTime.match(/^\d{1,2}:\d{2}$/)) {
+          // Convert 09:00 AM/PM if AI sent it, or handle 9:00
+          if (startTime.includes(' ')) {
+            const parts = startTime.split(' ');
+            let [h, m] = parts[0].split(':');
+            let hour = parseInt(h);
+            if (parts[1].toLowerCase().includes('p') && hour < 12) hour += 12;
+            if (parts[1].toLowerCase().includes('a') && hour === 12) hour = 0;
+            startTime = `${hour.toString().padStart(2, '0')}:${m || '00'}`;
+          } else if (startTime.match(/^\d{1,2}:\d{2}$/)) {
             const [h, m] = startTime.split(':');
             startTime = `${h.padStart(2, '0')}:${m}`;
           }
 
           let endTime = String(item.endTime || item.end || item['وقت_الانتهاء'] || item['النهاية'] || '').trim();
-          if (endTime && endTime.match(/^\d{1,2}:\d{2}$/)) {
-            const [h, m] = endTime.split(':');
-            endTime = `${h.padStart(2, '0')}:${m}`;
+          if (endTime) {
+            if (endTime.includes(' ')) {
+              const parts = endTime.split(' ');
+              let [h, m] = parts[0].split(':');
+              let hour = parseInt(h);
+              if (parts[1].toLowerCase().includes('p') && hour < 12) hour += 12;
+              if (parts[1].toLowerCase().includes('a') && hour === 12) hour = 0;
+              endTime = `${hour.toString().padStart(2, '0')}:${m || '00'}`;
+            } else if (endTime.match(/^\d{1,2}:\d{2}$/)) {
+              const [h, m] = endTime.split(':');
+              endTime = `${h.padStart(2, '0')}:${m}`;
+            }
           }
 
           const subject = String(item.subject || item['المادة'] || 'غير محدد').trim();
@@ -385,12 +435,21 @@ export function Schedules() {
           successCount++;
         } catch (innerError) {
           console.error("Error processing item:", item, innerError);
+          errorCount++;
         }
       }
 
-      toast.success(`تم إضافة ${successCount} مواعيد بنجاح`);
-      setIsImportModalOpen(false);
-      setImportText('');
+      if (successCount > 0) {
+        toast.success(`تم إضافة ${successCount} مواعيد بنجاح`);
+      }
+      if (errorCount > 0) {
+        toast.error(`فشل في معالجة ${errorCount} عنصر`);
+      }
+      
+      if (successCount > 0) {
+        setIsImportModalOpen(false);
+        setImportText('');
+      }
     } catch (error) {
       console.error("Bulk Import Error:", error);
       toast.error('حدث خطأ أثناء الاستيراد');

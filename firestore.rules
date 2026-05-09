@@ -40,6 +40,10 @@ service cloud.firestore {
 
     // --- Validation Helpers ---
 
+    function isBuiltInGrade(id) {
+      return id in ['kg1', 'kg2', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'm1', 'm2', 'm3', 's1', 's2', 's3'];
+    }
+
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'role']) &&
              data.uid is string &&
@@ -87,7 +91,7 @@ service cloud.firestore {
       return data.keys().hasAll(['name', 'phone', 'gradeId']) &&
              data.name is string &&
              data.phone is string &&
-             (data.gradeId == "" || exists(/databases/$(database)/documents/grades/$(data.gradeId)));
+             (data.gradeId == "" || exists(/databases/$(database)/documents/grades/$(data.gradeId)) || isBuiltInGrade(data.gradeId));
     }
 
     // --- Match Rules ---
@@ -128,7 +132,7 @@ service cloud.firestore {
     match /groups/{groupId} {
       allow read: if isSignedIn();
       allow create: if isAdmin() && isValidGroup(incoming()) && 
-                    exists(/databases/$(database)/documents/grades/$(incoming().gradeId)) &&
+                    (exists(/databases/$(database)/documents/grades/$(incoming().gradeId)) || isBuiltInGrade(incoming().gradeId)) &&
                     exists(/databases/$(database)/documents/teachers/$(incoming().teacherId));
       allow update: if isAdmin() && isValidGroup(incoming());
       allow delete: if isAdmin();
