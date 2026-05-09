@@ -40,6 +40,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, []);
 
+  useEffect(() => {
+    if (settings?.systemName) {
+      document.title = settings.systemName;
+    }
+  }, [settings?.systemName]);
+
   return (
     <SettingsContext.Provider value={{ settings, loading }}>
       {children}

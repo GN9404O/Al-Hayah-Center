@@ -17,7 +17,10 @@ import {
 import { motion } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
+import { useSettings } from '../contexts/SettingsContext';
+
 export function Dashboard() {
+  const { settings } = useSettings();
   const [stats, setStats] = useState({
     students: 0,
     teachers: 0,
@@ -73,7 +76,7 @@ const formatTime12h = (time: string) => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-black text-gray-900">لوحة التحكم</h1>
-          <p className="text-gray-500">مرحباً بك مجدداً في نظام إدارة المركز</p>
+          <p className="text-gray-500">مرحباً بك مجدداً في نظام إدارة {settings?.systemName || 'المركز'}</p>
         </div>
         <div className="bg-white border border-gray-100 rounded-2xl px-4 py-2 shadow-sm flex items-center gap-2">
           <Clock className="w-4 h-4 text-blue-600" />

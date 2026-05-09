@@ -470,7 +470,7 @@ export function StudentPortal() {
             >
               <span className="material-symbols-outlined">menu</span>
             </button>
-            <h1 className="text-xl md:text-2xl font-bold text-white leading-none">إديو سنتر</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-white leading-none">{settings?.systemName || 'إديو سنتر'}</h1>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/30">
@@ -1097,7 +1097,7 @@ export function StudentPortal() {
 
       {/* Footer (Desktop Only) */}
       <footer className="hidden md:flex w-full py-md px-gutter flex flex-col items-center max-w-7xl mx-auto mb-20 border-t border-gray-100 opacity-60">
-        <p className="text-xs text-gray-400">© إديو سنتر {new Date().getFullYear()}. جميع الحقوق محفوظة.</p>
+        <p className="text-xs text-gray-400">© {settings?.systemName || 'إديو سنتر'} {new Date().getFullYear()}. جميع الحقوق محفوظة.</p>
         <div className="flex gap-4 mt-2">
           <button className="text-xs text-[#005bbf]">عن المنصة</button>
           <span className="text-gray-300">•</span>
