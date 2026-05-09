@@ -19,14 +19,37 @@ export function StudentPortal() {
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(localStorage.getItem('edu_center_grade_id'));
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(localStorage.getItem('edu_center_stage_id'));
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'schedule' | 'subjects' | 'account'>('home');
   const [selectedTeacherProfile, setSelectedTeacherProfile] = useState<Teacher | null>(null);
+
+  const handleLogout = () => {
+    localStorage.removeItem('edu_center_grade_id');
+    localStorage.removeItem('edu_center_stage_id');
+    logout();
+  };
+
+  // Sync selection with localStorage
+  useEffect(() => {
+    if (selectedGradeId) {
+      localStorage.setItem('edu_center_grade_id', selectedGradeId);
+    } else {
+      localStorage.removeItem('edu_center_grade_id');
+    }
+  }, [selectedGradeId]);
+
+  useEffect(() => {
+    if (selectedStageId) {
+      localStorage.setItem('edu_center_stage_id', selectedStageId);
+    } else {
+      localStorage.removeItem('edu_center_stage_id');
+    }
+  }, [selectedStageId]);
 
   // Fetch student profile
   useEffect(() => {
@@ -354,7 +377,7 @@ export function StudentPortal() {
           </form>
 
           <button 
-            onClick={logout}
+            onClick={handleLogout}
             className="mt-8 w-full text-red-500 font-bold flex items-center justify-center gap-2 hover:bg-red-50 py-2 rounded-xl transition-all"
           >
             <LogOut className="w-4 h-4" />
@@ -447,7 +470,7 @@ export function StudentPortal() {
           </div>
           
           <button 
-            onClick={logout}
+            onClick={handleLogout}
             className="mt-12 text-red-500 font-bold flex items-center gap-2 mx-auto hover:bg-red-50 px-6 py-2 rounded-full transition-all"
           >
             <LogOut className="w-4 h-4" />
