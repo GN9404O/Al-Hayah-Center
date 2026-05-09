@@ -49,7 +49,6 @@ service cloud.firestore {
              data.uid is string &&
              data.email is string &&
              data.role in ['admin', 'staff', 'student'] &&
-             data.email == request.auth.token.email &&
              (!('displayName' in data) || data.displayName is string) &&
              (!('photoURL' in data) || data.photoURL is string);
     }
@@ -102,13 +101,20 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isSignedIn() && request.auth.uid == userId && 
                     isValidUser(incoming()) &&
+                    incoming().email == request.auth.token.email &&
                     (incoming().role != 'admin' || request.auth.token.email == 'canva40478@gmail.com');
-      allow update: if isSignedIn() && request.auth.uid == userId && 
-                    isValidUser(incoming()) &&
-                    (
-                      incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']) ||
-                      (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']) && request.auth.token.email == 'canva40478@gmail.com')
-                    );
+      allow update: if isSignedIn() && (
+                    (request.auth.uid == userId && 
+                     isValidUser(incoming()) &&
+                     incoming().email == request.auth.token.email &&
+                     (
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']) ||
+                       (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']) && request.auth.token.email == 'canva40478@gmail.com')
+                     )
+                    ) ||
+                    (request.auth.token.email == 'canva40478@gmail.com' && 
+                     incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']))
+                  );
       allow delete: if false; 
     }
 

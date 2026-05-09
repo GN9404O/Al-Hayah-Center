@@ -172,26 +172,30 @@ export function StudentPortal() {
     return currentHHmm >= startTime && currentHHmm <= effectiveEndTime;
   };
   
+  const getWhatsAppUrl = (message: string) => {
+    if (!settings?.whatsappNumber) return null;
+    const countryCode = settings.whatsappCountryCode?.replace('+', '') || '20';
+    const cleanNumber = settings.whatsappNumber.replace(/^0+/, '').replace(/\D/g, '');
+    const fullNumber = `${countryCode}${cleanNumber}`;
+    return `https://wa.me/${fullNumber}?text=${encodeURIComponent(message)}`;
+  };
+
   const handleBookingClick = (lesson: Schedule, teacher?: Teacher) => {
-    if (!settings?.whatsappNumber) {
+    const url = getWhatsAppUrl(`مرحباً، أود حجز مقعد في محاضرة ${lesson.subject} مع ${teacher?.name || 'المعلم'} ميعاد ${formatTime12h(lesson.startTime)} يوم ${getDayArabic(lesson.day)}\n\nالاسم: ${user?.displayName || ''}\nرقم هاتف الطالب: ${studentProfile?.phone || ''}`);
+    if (!url) {
       toast.error('رقم الحجز غير متاح حالياً');
       return;
     }
-    
-    const cleanPhone = settings.whatsappNumber.replace(/\D/g, '');
-    const message = encodeURIComponent(`أهلاً بك، أود حجز مقعد في محاضرة ${lesson.subject} مع ${teacher?.name || 'المعلم'} ميعاد ${formatTime12h(lesson.startTime)} يوم ${getDayArabic(lesson.day)}`);
-    window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
+    window.open(url, '_blank');
   };
 
-  // Handle Support Click
   const handleSupportClick = () => {
-    if (!settings?.whatsappNumber) {
+    const url = getWhatsAppUrl(`مرحباً، أحتاج إلى مساعدة بخصوص المنصة.\n\nالاسم: ${user?.displayName || ''}\nالبريد الإلكتروني: ${user?.email || ''}`);
+    if (!url) {
       toast.error('رقم الدعم غير متاح حالياً');
       return;
     }
-    const cleanPhone = settings.whatsappNumber.replace(/\D/g, '');
-    const message = encodeURIComponent('مرحباً، أحتاج إلى مساعدة بخصوص المنصة.');
-    window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
+    window.open(url, '_blank');
   };
 
   // Mandatory Profile Check

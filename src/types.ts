@@ -3,6 +3,7 @@ export interface AppSettings {
   systemName: string;
   systemDescription?: string;
   whatsappNumber?: string;
+  whatsappCountryCode?: string;
   updatedAt: any;
 }
 
