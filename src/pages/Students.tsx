@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Student, Grade, Group } from '../types';
+import { ACADEMIC_STAGES, getGradeNameById } from '../constants';
 import { Button, Input, Card, Badge } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -18,6 +19,7 @@ export function Students() {
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
+  const [selectedStageId, setSelectedStageId] = useState('');
 
   const [formData, setFormData] = useState({ 
     name: '', 
@@ -117,11 +119,17 @@ export function Students() {
                           (s.email?.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           s.phone.includes(searchTerm) || 
                           s.parentPhone.includes(searchTerm);
-    const matchesGrade = filterGrade ? s.gradeId === filterGrade : true;
+    
+    // Support matching both built-in grades and stage groups
+    const matchesGrade = filterGrade ? (
+      s.gradeId === filterGrade || 
+      ACADEMIC_STAGES.find(stage => stage.id === filterGrade)?.grades.some(g => g.id === s.gradeId)
+    ) : true;
+    
     return matchesSearch && matchesGrade;
   });
 
-  const getGradeName = (id: string) => grades.find(g => g.id === id)?.name || '-';
+  const getGradeName = (id: string) => getGradeNameById(id, grades);
   const getGroupName = (id: string) => groups.find(g => g.id === id)?.name || '-';
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-600" /></div>;
@@ -157,8 +165,22 @@ export function Students() {
             value={filterGrade}
             onChange={(e) => setFilterGrade(e.target.value)}
           >
-            <option value="">جميع المراحل</option>
-            {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            <option value="">جميع المراحل والصفوف</option>
+            {ACADEMIC_STAGES.map(stage => (
+              <optgroup key={stage.id} label={stage.name}>
+                <option value={stage.id}>كل {stage.name}</option>
+                {stage.grades.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </optgroup>
+            ))}
+            {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).length > 0 && (
+              <optgroup label="مراحل مخصصة">
+                {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
       </div>
@@ -223,12 +245,44 @@ export function Students() {
             <Input label="رقم هاتف ولي الأمر" value={formData.parentPhone} onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })} required />
           </div>
           <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">المرحلة</label>
-              <select className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={formData.gradeId} onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })} required>
-                <option value="">اختر المرحلة</option>
-                {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
+            <div className="space-y-4 p-4 bg-blue-50/30 rounded-2xl border border-blue-100">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-bold text-blue-900">المرحلة الدراسية</label>
+                <select 
+                  className="w-full rounded-xl border-none bg-white px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500" 
+                  value={selectedStageId || ACADEMIC_STAGES.find(s => s.grades.some(g => g.id === formData.gradeId))?.id || ''} 
+                  onChange={(e) => {
+                    setSelectedStageId(e.target.value);
+                    setFormData({ ...formData, gradeId: '' });
+                  }}
+                  required
+                >
+                  <option value="">اختر المرحلة</option>
+                  {ACADEMIC_STAGES.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                  {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {(selectedStageId || ACADEMIC_STAGES.find(s => s.grades.some(g => g.id === formData.gradeId))) && ACADEMIC_STAGES.find(s => s.id === (selectedStageId || ACADEMIC_STAGES.find(st => st.grades.some(g => g.id === formData.gradeId))?.id)) && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-bold text-blue-900">الصف الدراسي</label>
+                  <select 
+                    className="w-full rounded-xl border-none bg-white px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500" 
+                    value={formData.gradeId} 
+                    onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })} 
+                    required
+                  >
+                    <option value="">اختر الصف</option>
+                    {ACADEMIC_STAGES.find(s => s.id === (selectedStageId || ACADEMIC_STAGES.find(st => st.grades.some(g => g.id === formData.gradeId))?.id))?.grades.map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
           <div className="space-y-1.5">

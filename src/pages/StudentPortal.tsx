@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Grade, Schedule, Group, Teacher } from '../types';
+import { ACADEMIC_STAGES } from '../constants';
 import { LogOut, Search, Clock, MapPin, Send, MessageSquare, AlertCircle, Facebook, Instagram, Twitter, Youtube, Phone, Info, Star, ShieldCheck, Mail, Share2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -18,6 +19,7 @@ export function StudentPortal() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -200,6 +202,8 @@ export function StudentPortal() {
     return !studentProfile.phone?.trim() || !studentProfile.parentPhone?.trim() || !studentProfile.gradeId;
   }, [studentProfile, isProfileLoaded, user?.role]);
 
+  const [localStageId, setLocalStageId] = useState<string>('');
+
   const handleProfileComplete = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -307,24 +311,32 @@ export function StudentPortal() {
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">المرحلة الدراسية</label>
               <select
-                name="gradeId"
+                className="w-full h-14 bg-gray-50 border-none rounded-2xl px-6 focus:ring-2 focus:ring-[#1a73e8] font-bold mb-4"
+                value={localStageId}
+                onChange={(e) => setLocalStageId(e.target.value)}
                 required
-                className="w-full h-14 bg-gray-50 border-none rounded-2xl px-6 focus:ring-2 focus:ring-[#1a73e8] font-bold"
               >
-                <option value="">اختر مرحلتك الدراسية</option>
-                <option value="primary">ابتدائي</option>
-                <option value="preparatory">اعدادي</option>
-                <option value="secondary">ثانوي</option>
-                {grades.length > 0 && (
-                  <>
-                    <optgroup label="صفوف إضافية">
-                      {grades.map(grade => (
-                        <option key={grade.id} value={grade.id}>{grade.name}</option>
-                      ))}
-                    </optgroup>
-                  </>
-                )}
+                <option value="">اختر المرحلة الدراسية</option>
+                {ACADEMIC_STAGES.map(stage => (
+                  <option key={stage.id} value={stage.id}>{stage.name}</option>
+                ))}
               </select>
+
+              {localStageId && (
+                <>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">الصف الدراسي</label>
+                  <select
+                    name="gradeId"
+                    required
+                    className="w-full h-14 bg-gray-50 border-none rounded-2xl px-6 focus:ring-2 focus:ring-[#1a73e8] font-bold"
+                  >
+                    <option value="">اختر صفك الدراسي</option>
+                    {ACADEMIC_STAGES.find(s => s.id === localStageId)?.grades.map(grade => (
+                      <option key={grade.id} value={grade.id}>{grade.name}</option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
 
             <button
@@ -348,8 +360,10 @@ export function StudentPortal() {
     );
   }
 
-  // Step 1: Stage Selection Screen
+  // Step 1: Stage/Grade Selection Screen
   if (!selectedGradeId) {
+    const selectedStage = ACADEMIC_STAGES.find(s => s.id === selectedStageId);
+
     return (
       <div className="min-h-screen bg-[#f7f9ff] flex flex-col items-center justify-center p-6" dir="rtl">
         <motion.div
@@ -358,32 +372,59 @@ export function StudentPortal() {
            className="max-w-4xl w-full text-center"
         >
           <div className="mb-12">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">أهلاً بك في {settings?.systemName || 'إديو سنتر'}</h1>
-            <p className="text-lg text-gray-500 font-medium">يرجى اختيار المرحلة الدراسية لمتابعة دروسك</p>
+            <h1 className="text-4xl font-bold text-gray-900 mb-4 flex items-center justify-center gap-3">
+              {selectedStage && (
+                <button 
+                  onClick={() => setSelectedStageId(null)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-400 rotate-180" />
+                </button>
+              )}
+              أهلاً بك في {settings?.systemName || 'إديو سنتر'}
+            </h1>
+            <p className="text-lg text-gray-500 font-medium">
+              {!selectedStageId ? 'يرجى اختيار المرحلة الدراسية لمتابعة دروسك' : `اختر صفك الدراسي في ${selectedStage?.name}`}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { id: 'primary', name: 'المرحلة الابتدائية' },
-              { id: 'preparatory', name: 'المرحلة الاعدادية' },
-              { id: 'secondary', name: 'المرحلة الثانوية' }
-            ].map((stage, idx) => (
-              <button
-                key={stage.id}
-                onClick={() => setSelectedGradeId(stage.id)}
-                className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-transparent hover:border-[#1a73e8] hover:shadow-2xl hover:-translate-y-2 transition-all transition-duration-300 group relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform"></div>
-                <div className="relative z-10">
-                  <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-[#1a73e8] mx-auto mb-6 group-hover:bg-[#1a73e8] group-hover:text-white transition-all">
-                    <span className="material-symbols-outlined text-3xl">school</span>
+            {!selectedStageId ? (
+              ACADEMIC_STAGES.map((stage, idx) => (
+                <button
+                  key={stage.id}
+                  onClick={() => setSelectedStageId(stage.id)}
+                  className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-transparent hover:border-[#1a73e8] hover:shadow-2xl hover:-translate-y-2 transition-all transition-duration-300 group relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform"></div>
+                  <div className="relative z-10">
+                    <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-[#1a73e8] mx-auto mb-6 group-hover:bg-[#1a73e8] group-hover:text-white transition-all">
+                      <span className="material-symbols-outlined text-3xl">school</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900">{stage.name}</h3>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900">{stage.name}</h3>
-                </div>
-              </button>
-            ))}
-            {/* Show any other grades if available and not one of the main stages */}
-            {grades.filter(g => !['primary', 'preparatory', 'secondary'].includes(g.id)).map((grade) => (
+                </button>
+              ))
+            ) : (
+              selectedStage?.grades.map((grade) => (
+                <button
+                  key={grade.id}
+                  onClick={() => setSelectedGradeId(grade.id)}
+                  className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-transparent hover:border-[#1a73e8] hover:shadow-2xl hover:-translate-y-2 transition-all transition-duration-300 group relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform"></div>
+                  <div className="relative z-10">
+                    <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-[#1a73e8] mx-auto mb-6 group-hover:bg-[#1a73e8] group-hover:text-white transition-all">
+                      <span className="material-symbols-outlined text-3xl">local_library</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900">{grade.name}</h3>
+                  </div>
+                </button>
+              ))
+            )}
+            
+            {/* Show dynamic custom grades only on stage 1 if stageId is null */}
+            {!selectedStageId && grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).map((grade) => (
               <button
                 key={grade.id}
                 onClick={() => setSelectedGradeId(grade.id)}
@@ -939,14 +980,18 @@ export function StudentPortal() {
                       <div className="p-4 bg-gray-50 rounded-xl flex items-center justify-between">
                         <span className="text-sm text-gray-500 font-bold">المرحلة الدراسية</span>
                         <span className="text-sm font-bold text-[#1a73e8]">
-                          {grades.find(g => g.id === selectedGradeId)?.name || 
-                           (selectedGradeId === 'primary' ? 'المرحلة الابتدائية' : 
-                            selectedGradeId === 'preparatory' ? 'المرحلة الاعدادية' : 
-                            selectedGradeId === 'secondary' ? 'المرحلة الثانوية' : selectedGradeId)}
+                          {(() => {
+                            const stage = ACADEMIC_STAGES.find(s => s.grades.some(g => g.id === selectedGradeId));
+                            const grade = stage?.grades.find(g => g.id === selectedGradeId) || grades.find(g => g.id === selectedGradeId);
+                            return grade ? grade.name : (selectedGradeId === 'primary' ? 'المرحلة الابتدائية' : selectedGradeId);
+                          })()}
                         </span>
                       </div>
                       <button 
-                        onClick={() => setSelectedGradeId(null)}
+                        onClick={() => {
+                          setSelectedGradeId(null);
+                          setSelectedStageId(null);
+                        }}
                         className="w-full h-12 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-all font-bold text-sm"
                       >
                         تغيير المرحلة الدراسية

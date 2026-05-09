@@ -121,6 +121,29 @@ export function Grades() {
     setFormData({ name: '' });
   };
 
+  const ACADEMIC_STAGES = [
+    {
+      id: 'kindergarten',
+      name: 'رياض الأطفال',
+      subGrades: ['كي جي 1', 'كي جي 2']
+    },
+    {
+      id: 'primary',
+      name: 'المرحلة الابتدائية',
+      subGrades: ['الصف الأول الابتدائي', 'الصف الثاني الابتدائي', 'الصف الثالث الابتدائي', 'الصف الرابع الابتدائي', 'الصف الخامس الابتدائي', 'الصف السادس الابتدائي']
+    },
+    {
+      id: 'preparatory',
+      name: 'المرحلة الإعدادية',
+      subGrades: ['الصف الأول الإعدادي', 'الصف الثاني الإعدادي', 'الصف الثالث الإعدادي']
+    },
+    {
+      id: 'secondary',
+      name: 'المرحلة الثانوية',
+      subGrades: ['الصف الأول الثانوي', 'الصف الثاني الثانوي', 'الصف الثالث الثانوي']
+    }
+  ];
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -130,7 +153,7 @@ export function Grades() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10 pb-20">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-black text-gray-900">المراحل الدراسية</h1>
@@ -138,19 +161,56 @@ export function Grades() {
         </div>
         <Button onClick={() => openModal()} className="gap-2 rounded-xl">
           <Plus className="w-5 h-5" />
-          <span>إضافة مرحلة</span>
+          <span>إضافة مرحلة مخصصة</span>
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {grades.length === 0 ? (
-          <div className="col-span-full py-20 text-center space-y-4">
-            <GraduationCap className="mx-auto w-16 h-16 text-gray-200" />
-            <p className="text-gray-400">لا توجد مراحل دراسية مضافة بعد</p>
-          </div>
-        ) : (
-          grades.map((grade) => (
-            <Card key={grade.id} className="group hover:border-blue-200 transition-all duration-300">
+      {/* Built-in Academic Stages */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-bold text-blue-900 flex items-center gap-2">
+          <span className="w-2 h-6 bg-blue-600 rounded-full"></span>
+          مراحل النظام الأساسية
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+          {ACADEMIC_STAGES.map((stage) => (
+            <Card key={stage.id} className="bg-blue-50/30 border-blue-100">
+              <div className="p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center">
+                    <GraduationCap className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg">{stage.name}</h3>
+                    <p className="text-xs text-blue-600 font-bold">مرحلة ثابتة</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {stage.subGrades.map((sub, idx) => (
+                    <span key={idx} className="bg-white px-3 py-1 rounded-lg text-xs font-medium text-gray-600 border border-blue-50">
+                      {sub}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom/Firestore Grades */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <span className="w-2 h-6 bg-gray-900 rounded-full"></span>
+          مراحل إضافية (مخصصة)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {grades.length === 0 ? (
+            <div className="col-span-full py-12 text-center bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-200">
+              <p className="text-gray-400 font-medium">لا توجد مراحل مخصصة مضافة حالياً</p>
+            </div>
+          ) : (
+            grades.map((grade) => (
+              <Card key={grade.id} className="group hover:border-blue-200 transition-all duration-300">
               <div className="p-6 flex justify-between items-start">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold text-lg">
@@ -183,8 +243,9 @@ export function Grades() {
           ))
         )}
       </div>
+    </div>
 
-      <Modal 
+    <Modal 
         isOpen={isModalOpen} 
         onClose={closeModal} 
         title={currentGrade ? 'تعديل المرحلة' : 'إضافة مرحلة جديدة'}

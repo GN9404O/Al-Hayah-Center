@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Teacher, Grade } from '../types';
+import { ACADEMIC_STAGES } from '../constants';
 import { Button, Input, Card } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -289,12 +290,25 @@ export function Teachers() {
                   {teacher.gradeIds && teacher.gradeIds.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {teacher.gradeIds.map(gid => {
-                        const grade = grades.find(g => g.id === gid);
-                        return grade ? (
+                        // Check built-in grades first
+                        let gName = '';
+                        for (const stage of ACADEMIC_STAGES) {
+                          const g = stage.grades.find(grade => grade.id === gid);
+                          if (g) {
+                            gName = g.name;
+                            break;
+                          }
+                        }
+                        
+                        if (!gName) {
+                          gName = grades.find(g => g.id === gid)?.name || gid;
+                        }
+
+                        return (
                           <span key={gid} className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md">
-                            {grade.name}
+                            {gName}
                           </span>
-                        ) : null;
+                        );
                       })}
                     </div>
                   )}
@@ -393,23 +407,52 @@ export function Teachers() {
 
           <div className="space-y-2">
             <label className="block text-sm font-bold text-gray-700">الصفوف الدراسية</label>
-            <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
-              {grades.map(grade => (
-                <button
-                  key={grade.id}
-                  type="button"
-                  onClick={() => toggleGrade(grade.id)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    formData.gradeIds.includes(grade.id)
-                      ? 'bg-[#1a73e8] text-white shadow-md'
-                      : 'bg-white text-gray-500 border border-gray-200'
-                  }`}
-                >
-                  {formData.gradeIds.includes(grade.id) && <Check className="w-3 h-3" />}
-                  {grade.name}
-                </button>
+            <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+              {ACADEMIC_STAGES.map(stage => (
+                <div key={stage.id} className="space-y-2">
+                  <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{stage.name}</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {stage.grades.map(grade => (
+                      <button
+                        key={grade.id}
+                        type="button"
+                        onClick={() => toggleGrade(grade.id)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                          formData.gradeIds.includes(grade.id)
+                            ? 'bg-[#1a73e8] text-white shadow-md'
+                            : 'bg-white text-gray-500 border border-gray-200'
+                        }`}
+                      >
+                        {formData.gradeIds.includes(grade.id) && <Check className="w-3 h-3" />}
+                        {grade.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
-              {grades.length === 0 && <p className="text-[10px] text-gray-400">لا توجد صفوف مضافة</p>}
+              
+              {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-gray-200">
+                  <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">صفوف مخصصة</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).map(grade => (
+                      <button
+                        key={grade.id}
+                        type="button"
+                        onClick={() => toggleGrade(grade.id)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                          formData.gradeIds.includes(grade.id)
+                            ? 'bg-gray-800 text-white shadow-md'
+                            : 'bg-white text-gray-500 border border-gray-200'
+                        }`}
+                      >
+                        {formData.gradeIds.includes(grade.id) && <Check className="w-3 h-3" />}
+                        {grade.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

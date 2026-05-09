@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Schedule, Grade, Group, Teacher } from '../types';
+import { ACADEMIC_STAGES, getGradeNameById } from '../constants';
 import { Button, Input, Card, Badge } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -35,6 +36,7 @@ export function Schedules() {
   const [currentSchedule, setCurrentSchedule] = useState<Schedule | null>(null);
   const [importText, setImportText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [selectedStageId, setSelectedStageId] = useState('');
 
   const [formData, setFormData] = useState({
     gradeId: '',
@@ -236,18 +238,34 @@ export function Schedules() {
         let gradeId = item.gradeId;
         
         if (!gradeId && gName) {
-          const existingGrade = grades.find(g => g.name === gName);
-          if (existingGrade) {
-            gradeId = existingGrade.id;
-          } else if (localGradeMap.has(gName)) {
-            gradeId = localGradeMap.get(gName);
-          } else {
-            const newGradeRef = await addDoc(collection(db, 'grades'), {
-              name: gName,
-              createdAt: serverTimestamp(),
-            });
-            gradeId = newGradeRef.id;
-            localGradeMap.set(gName, gradeId);
+          // Look in built-in stages first
+          let foundBuiltIn = false;
+          for (const stage of ACADEMIC_STAGES) {
+            const builtInGrade = stage.grades.find(g => 
+              g.name === gName || 
+              g.name.replace('أ', 'ا') === gName.replace('أ', 'ا')
+            );
+            if (builtInGrade) {
+              gradeId = builtInGrade.id;
+              foundBuiltIn = true;
+              break;
+            }
+          }
+
+          if (!foundBuiltIn) {
+            const existingGrade = grades.find(g => g.name === gName);
+            if (existingGrade) {
+              gradeId = existingGrade.id;
+            } else if (localGradeMap.has(gName)) {
+              gradeId = localGradeMap.get(gName);
+            } else {
+              const newGradeRef = await addDoc(collection(db, 'grades'), {
+                name: gName,
+                createdAt: serverTimestamp(),
+              });
+              gradeId = newGradeRef.id;
+              localGradeMap.set(gName, gradeId);
+            }
           }
         }
 
@@ -394,7 +412,7 @@ export function Schedules() {
     items: schedules.filter(s => s.day === day).sort((a, b) => a.startTime.localeCompare(b.startTime))
   }));
 
-  const getGradeName = (id: string) => grades.find(g => g.id === id)?.name || '-';
+  const getGradeName = (id: string) => getGradeNameById(id, grades);
   const getGroupName = (id: string) => groups.find(g => g.id === id)?.name || '-';
   const getTeacherName = (id: string) => teachers.find(t => t.id === id)?.name || '-';
 
@@ -484,12 +502,44 @@ export function Schedules() {
       <Modal isOpen={isModalOpen} onClose={closeModal} title={currentSchedule ? 'تعديل موعد' : 'إضافة موعد جديد'} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">المرحلة</label>
-              <select className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={formData.gradeId} onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })} required>
-                <option value="">اختر المرحلة</option>
-                {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
+            <div className="space-y-4 p-4 bg-blue-50/30 rounded-2xl border border-blue-100">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-bold text-blue-900">المرحلة الدراسية</label>
+                <select 
+                  className="w-full rounded-xl border-none bg-white px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500" 
+                  value={selectedStageId || ACADEMIC_STAGES.find(s => s.grades.some(g => g.id === formData.gradeId))?.id || ''} 
+                  onChange={(e) => {
+                    setSelectedStageId(e.target.value);
+                    setFormData({ ...formData, gradeId: '' });
+                  }}
+                  required
+                >
+                  <option value="">اختر المرحلة</option>
+                  {ACADEMIC_STAGES.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                  {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {(selectedStageId || ACADEMIC_STAGES.find(s => s.grades.some(g => g.id === formData.gradeId))) && ACADEMIC_STAGES.find(s => s.id === (selectedStageId || ACADEMIC_STAGES.find(st => st.grades.some(g => g.id === formData.gradeId))?.id)) && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-bold text-blue-900">الصف الدراسي</label>
+                  <select 
+                    className="w-full rounded-xl border-none bg-white px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-500" 
+                    value={formData.gradeId} 
+                    onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })} 
+                    required
+                  >
+                    <option value="">اختر الصف</option>
+                    {ACADEMIC_STAGES.find(s => s.id === (selectedStageId || ACADEMIC_STAGES.find(st => st.grades.some(g => g.id === formData.gradeId))?.id))?.grades.map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 
@@ -552,10 +602,25 @@ export function Schedules() {
         <div className="space-y-4">
           <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700 leading-relaxed">
             <p className="font-bold mb-2">كيفية الاستخدام:</p>
-            <ol className="list-decimal list-inside space-y-1">
+            <ol className="list-decimal list-inside space-y-1 mb-3">
               <li>قم بإرسال صورة الجدول لـ ChatGPT أو Gemini.</li>
               <li>اطلب منه تحويلها إلى JSON بهذا التنسيق (استخدم نظام 24 ساعة للوقت):</li>
             </ol>
+
+            <div className="bg-white p-3 rounded-lg border border-blue-100 mb-4">
+              <p className="font-bold text-[10px] text-blue-900 mb-2 uppercase tracking-widest">أسماء الصفوف المعتمدة في النظام:</p>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                {ACADEMIC_STAGES.map(stage => (
+                  <div key={stage.id} className="space-y-1">
+                    <p className="font-black text-gray-400">{stage.name}:</p>
+                    <ul className="list-disc list-inside px-1">
+                      {stage.grades.map(g => <li key={g.id}>{g.name}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <pre className="mt-2 p-2 bg-white rounded border border-blue-200 overflow-x-auto">
 {`[
   {

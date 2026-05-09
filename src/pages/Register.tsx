@@ -6,11 +6,15 @@ import { motion } from 'motion/react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Grade } from '../types';
+import { ACADEMIC_STAGES } from '../constants';
 
 export function Register() {
   const { user, login, loading } = useAuth();
   const { settings } = useSettings();
   const [grades, setGrades] = useState<Grade[]>([]);
+
+  const [selectedStageId, setSelectedStageId] = useState<string>('');
+  const [selectedGradeId, setSelectedGradeId] = useState<string>('');
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'grades'), (snapshot) => {
@@ -91,16 +95,41 @@ export function Register() {
               <div className="flex flex-col">
                 <label className="text-xs font-bold text-gray-600 mb-2 px-1">المرحلة الدراسية</label>
                 <select 
-                  className="w-full bg-gray-50 border-none focus:ring-2 focus:ring-blue-600 focus:bg-white rounded-xl p-4 text-right transition-all font-bold"
+                  className="w-full bg-gray-50 border-none focus:ring-2 focus:ring-blue-600 focus:bg-white rounded-xl p-4 text-right transition-all font-bold mb-4"
+                  value={selectedStageId}
+                  onChange={(e) => {
+                    setSelectedStageId(e.target.value);
+                    setSelectedGradeId('');
+                  }}
                 >
-                  <option value="">اختر مرحلتك الدراسية</option>
-                  <option value="primary">ابتدائي</option>
-                  <option value="preparatory">اعدادي</option>
-                  <option value="secondary">ثانوي</option>
-                  {grades.map(grade => (
-                    <option key={grade.id} value={grade.id}>{grade.name}</option>
+                  <option value="">اختر المرحلة الدراسية</option>
+                  {ACADEMIC_STAGES.map(stage => (
+                    <option key={stage.id} value={stage.id}>{stage.name}</option>
                   ))}
+                  {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).length > 0 && (
+                    <optgroup label="مراحل أخرى">
+                      {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).map(grade => (
+                        <option key={grade.id} value={grade.id}>{grade.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
+
+                {selectedStageId && ACADEMIC_STAGES.find(s => s.id === selectedStageId) && (
+                  <>
+                    <label className="text-xs font-bold text-gray-600 mb-2 px-1">الصف الدراسي</label>
+                    <select 
+                      className="w-full bg-gray-50 border-none focus:ring-2 focus:ring-blue-600 focus:bg-white rounded-xl p-4 text-right transition-all font-bold"
+                      value={selectedGradeId}
+                      onChange={(e) => setSelectedGradeId(e.target.value)}
+                    >
+                      <option value="">اختر صفك الدراسي</option>
+                      {ACADEMIC_STAGES.find(s => s.id === selectedStageId)?.grades.map(grade => (
+                        <option key={grade.id} value={grade.id}>{grade.name}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
               </div>
 
               <button 
