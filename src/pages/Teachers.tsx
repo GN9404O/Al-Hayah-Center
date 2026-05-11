@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Teacher, Grade } from '../types';
+import { Teacher, Grade, User } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
 import { Button, Input, Card, cn } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { Plus, Edit2, Trash2, UserSquare2, Loader2, Phone, BookOpen, ImageIcon, Check, Filter, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, UserSquare2, Loader2, Phone, BookOpen, ImageIcon, Check, Filter, ChevronDown, UserPlus, Search, X, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 
@@ -17,11 +17,16 @@ export function Teachers() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
+  const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
   const [currentTeacher, setCurrentTeacher] = useState<Teacher | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [formData, setFormData] = useState({ 
     name: '', 
+    email: '',
     phone: '', 
     subject: '', 
     notes: '',
@@ -29,6 +34,7 @@ export function Teachers() {
     gradeIds: [] as string[],
     bio: '',
     experience: '',
+    userId: '',
     socialLinks: {
       facebook: '',
       twitter: '',
@@ -92,10 +98,16 @@ export function Teachers() {
     e.preventDefault();
     if (!formData.name.trim() || !formData.phone.trim() || !formData.subject.trim()) return;
 
+    const finalData = {
+      ...formData,
+      email: formData.email.toLowerCase().trim(),
+      name: formData.name.trim(),
+    };
+
     try {
       // Check for name duplicate before proceeding
       const duplicate = teachers.find(t => 
-        t.name.trim() === formData.name.trim() && 
+        t.name.trim() === finalData.name && 
         (!currentTeacher || t.id !== currentTeacher.id)
       );
 
@@ -106,15 +118,43 @@ export function Teachers() {
 
       if (currentTeacher) {
         await updateDoc(doc(db, 'teachers', currentTeacher.id), {
-          ...formData,
+          ...finalData,
           updatedAt: serverTimestamp(),
         });
+
+        // If a userId is present, update the user role to teacher
+        if (finalData.userId) {
+          await updateDoc(doc(db, 'users', finalData.userId), {
+            role: 'teacher'
+          });
+          // Also remove from students collection immediately
+          try {
+            await deleteDoc(doc(db, 'students', finalData.userId));
+          } catch (e) {
+            console.error('Error removing student document:', e);
+          }
+        }
+        
         toast.success('تم تحديث بيانات المعلم بنجاح');
       } else {
-        await addDoc(collection(db, 'teachers'), {
-          ...formData,
+        const docRef = await addDoc(collection(db, 'teachers'), {
+          ...finalData,
           createdAt: serverTimestamp(),
         });
+
+        // If a userId is present, update the user role to teacher
+        if (finalData.userId) {
+          await updateDoc(doc(db, 'users', finalData.userId), {
+            role: 'teacher'
+          });
+          // Also remove from students collection immediately
+          try {
+            await deleteDoc(doc(db, 'students', finalData.userId));
+          } catch (e) {
+            console.error('Error removing student document:', e);
+          }
+        }
+        
         toast.success('تم إضافة المعلم بنجاح');
       }
       closeModal();
@@ -146,11 +186,39 @@ export function Teachers() {
     }));
   };
 
+  const handleSearchUsers = async () => {
+    if (!userSearchQuery.trim()) return;
+    setSearchingUsers(true);
+    try {
+      const q = query(
+        collection(db, 'users'),
+        orderBy('email'),
+        where('email', '>=', userSearchQuery.toLowerCase()),
+        where('email', '<=', userSearchQuery.toLowerCase() + '\uf8ff')
+      );
+      const snapshot = await getDocs(q);
+      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    } catch (e) {
+      console.error('Error searching users:', e);
+      toast.error('حدث خطأ أثناء البحث عن المستخدمين');
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  const selectUser = (user: User) => {
+    setFormData(prev => ({ ...prev, userId: user.id }));
+    setIsUserSearchOpen(false);
+    setUserSearchQuery('');
+    setUsers([]);
+  };
+
   const openModal = (teacher?: Teacher) => {
     if (teacher) {
       setCurrentTeacher(teacher);
       setFormData({ 
         name: teacher.name, 
+        email: teacher.email || '',
         phone: teacher.phone, 
         subject: teacher.subject, 
         notes: teacher.notes || '',
@@ -158,6 +226,7 @@ export function Teachers() {
         gradeIds: teacher.gradeIds || [],
         bio: teacher.bio || '',
         experience: teacher.experience || '',
+        userId: teacher.userId || '',
         socialLinks: {
           facebook: teacher.socialLinks?.facebook || '',
           twitter: teacher.socialLinks?.twitter || '',
@@ -169,6 +238,7 @@ export function Teachers() {
       setCurrentTeacher(null);
       setFormData({ 
         name: '', 
+        email: '',
         phone: '', 
         subject: '', 
         notes: '',
@@ -176,6 +246,7 @@ export function Teachers() {
         gradeIds: [],
         bio: '',
         experience: '',
+        userId: '',
         socialLinks: {
           facebook: '',
           twitter: '',
@@ -192,6 +263,7 @@ export function Teachers() {
     setCurrentTeacher(null);
     setFormData({ 
       name: '', 
+      email: '',
       phone: '', 
       subject: '', 
       notes: '', 
@@ -199,6 +271,7 @@ export function Teachers() {
       gradeIds: [], 
       bio: '', 
       experience: '',
+      userId: '',
       socialLinks: { facebook: '', twitter: '', instagram: '', youtube: '' }
     });
   };
@@ -244,6 +317,45 @@ export function Teachers() {
           </Button>
         </div>
       </div>
+
+      <Card className="p-6 bg-blue-600 text-white overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-2">
+            <h2 className="text-xl font-black">ربط حساب معلم جديد ههنا</h2>
+            <p className="text-blue-100 text-sm font-medium">أضف بريد المعلم الإلكتروني لتمكينه من الدخول للوحة التحكم الخاصة به فوراً</p>
+          </div>
+          <div className="flex w-full md:w-auto gap-2">
+            <div className="relative flex-1 md:w-64">
+              <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
+              <input 
+                type="email"
+                placeholder="بريد المعلم الإلكتروني..."
+                className="w-full h-12 bg-white/20 border border-white/30 rounded-xl pr-12 pl-4 text-white placeholder:text-blue-200 focus:outline-none focus:ring-2 focus:ring-white/50 font-bold"
+                onKeyPress={async (e) => {
+                  if (e.key === 'Enter') {
+                    const email = (e.target as HTMLInputElement).value;
+                    if (email) {
+                      // Check if teacher exists with this email
+                      const q = query(collection(db, 'teachers'), where('email', '==', email.toLowerCase()));
+                      const teacherSnap = await getDocs(q);
+                      if (teacherSnap.empty) {
+                        toast.error('لم يتم العثور على معلم بهذا البريد الإلكتروني. يرجى إضافة المعلم أولاً.');
+                      } else {
+                        toast.success('سيتم تحويل المستخدم لمعلم عند دخوله للمنصة');
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+            <Button className="bg-white text-blue-600 hover:bg-blue-50 border-none rounded-xl h-12 font-black px-6 shadow-lg">
+              ربط سريع
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       {subjects.length > 0 && (
         <div className="relative inline-block text-right">
@@ -415,26 +527,33 @@ export function Teachers() {
               required
             />
             <Input
+              label="البريد الإلكتروني (لتسجيل الدخول)"
+              type="email"
+              placeholder="teacher@example.com"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase() })}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
               label="رقم الهاتف"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               required
             />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="المادة"
               value={formData.subject}
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               required
             />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="الخبرة (مثال: 10 سنوات خبرة)"
               value={formData.experience}
               onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
             />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="رابط الصورة (ImgBB)"
               placeholder="https://i.ibb.co/..."
@@ -442,6 +561,50 @@ export function Teachers() {
               onChange={(e) => setFormData({ ...formData, photoURL: e.target.value })}
               icon={<ImageIcon className="w-4 h-4" />}
             />
+          </div>
+
+          <div className="space-y-3 p-4 border border-blue-100 rounded-2xl bg-blue-50/20">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-blue-900">حساب المعلم (تسجيل الدخول)</h4>
+              {formData.userId ? (
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, userId: '' }))}
+                  className="text-xs text-red-500 font-bold hover:underline"
+                >
+                  إلغاء الربط
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsUserSearchOpen(true)}
+                  className="text-xs text-blue-600 font-bold flex items-center gap-1 hover:underline"
+                >
+                  <UserPlus className="w-3 h-3" />
+                  ربط حساب مستخدم
+                </button>
+              )}
+            </div>
+            
+            {formData.userId ? (
+              <div className="flex items-center gap-3 p-3 bg-white border border-blue-200 rounded-xl">
+                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                  <UserSquare2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">تم ربط الحساب</p>
+                  <p className="text-xs text-gray-400">ID: {formData.userId}</p>
+                </div>
+                <div className="mr-auto">
+                  <Check className="w-5 h-5 text-green-500" />
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 bg-white/50 border border-dashed border-blue-200 rounded-xl">
+                <p className="text-xs text-gray-400">لا يوجد حساب مستخدم مرتبط بهذا المعلم</p>
+                <p className="text-[10px] text-gray-400 mt-1">يجب ربط حساب لتمكين المعلم من الدخول للوحة التحكم الخاصة به</p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4 p-4 border border-blue-50 rounded-2xl bg-blue-50/30">
@@ -565,6 +728,57 @@ export function Teachers() {
         title="مسح جميع المعلمين"
         message="هل أنت متأكد من مسح جميع المعلمين؟ لا يمكن التراجع عن هذا الإجراء."
       />
+
+      <Modal
+        isOpen={isUserSearchOpen}
+        onClose={() => setIsUserSearchOpen(false)}
+        title="البحث عن مستخدم لربطه"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="ابحث بالبريد الإلكتروني..."
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              className="flex-1"
+              onKeyPress={(e) => e.key === 'Enter' && handleSearchUsers()}
+            />
+            <Button onClick={handleSearchUsers} disabled={searchingUsers}>
+              {searchingUsers ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            </Button>
+          </div>
+
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            {users.length === 0 ? (
+              <p className="text-center py-8 text-gray-400 text-sm">أدخل بريداً إلكترونياً صحيحاً للبحث</p>
+            ) : (
+              users.map(user => (
+                <button
+                  key={user.id}
+                  onClick={() => selectUser(user)}
+                  className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl border border-gray-100 transition-colors text-right"
+                >
+                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      <UserSquare2 className="w-6 h-6 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-gray-900 truncate">{user.displayName}</p>
+                    <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                  </div>
+                  <div className="p-2 text-blue-600">
+                    <Plus className="w-4 h-4" />
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

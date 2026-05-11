@@ -14,6 +14,7 @@ import { Settings } from './pages/Settings';
 import { Toaster } from 'react-hot-toast';
 
 import { StudentPortal } from './pages/StudentPortal';
+import TeacherPortal from './pages/TeacherPortal';
 
 export default function App() {
   return (
@@ -59,6 +60,9 @@ function RoleBasedRoute() {
       <Dashboard />
     </DashboardLayout>
   );
+
+  if (user.role === 'teacher') return <TeacherPortal />;
+  
   return <StudentPortal />;
 }
 

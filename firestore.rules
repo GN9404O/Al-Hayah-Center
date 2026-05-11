@@ -48,7 +48,7 @@ service cloud.firestore {
       return data.keys().hasAll(['uid', 'email', 'role']) &&
              data.uid is string &&
              data.email is string &&
-             data.role in ['admin', 'staff', 'student'] &&
+             data.role in ['admin', 'staff', 'student', 'teacher'] &&
              (!('displayName' in data) || data.displayName is string) &&
              (!('photoURL' in data) || data.photoURL is string);
     }
@@ -67,6 +67,7 @@ service cloud.firestore {
              (!('photoURL' in data) || data.photoURL is string) &&
              (!('bio' in data) || data.bio is string) &&
              (!('experience' in data) || data.experience is string) &&
+             (!('userId' in data) || data.userId is string) &&
              (!('socialLinks' in data) || data.socialLinks is map);
     }
 
@@ -93,6 +94,29 @@ service cloud.firestore {
              (data.gradeId == "" || exists(/databases/$(database)/documents/grades/$(data.gradeId)) || isBuiltInGrade(data.gradeId));
     }
 
+    function isValidExam(data) {
+      return data.keys().hasAll(['title', 'gradeId', 'date', 'duration', 'totalMarks', 'teacherId']) &&
+             data.title is string &&
+             data.gradeId is string &&
+             data.date is string &&
+             (data.duration is string || data.duration is int) &&
+             (data.totalMarks is string || data.totalMarks is int) &&
+             data.teacherId is string;
+    }
+
+    function isTeacher() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'
+      );
+    }
+
+    function isOwnerOfTeacherProfile(teacherId) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/teachers/$(teacherId)) &&
+             get(/databases/$(database)/documents/teachers/$(teacherId)).data.userId == request.auth.uid;
+    }
+
     // --- Match Rules ---
 
     // Users collection
@@ -112,7 +136,7 @@ service cloud.firestore {
                        (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']) && request.auth.token.email == 'canva40478@gmail.com')
                      )
                     ) ||
-                    (request.auth.token.email == 'canva40478@gmail.com' && 
+                    (isAdmin() && 
                      incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']))
                   );
       allow delete: if false; 
@@ -130,8 +154,16 @@ service cloud.firestore {
     match /teachers/{teacherId} {
       allow read: if isSignedIn();
       allow create: if isAdmin() && isValidTeacher(incoming());
-      allow update: if isAdmin() && isValidTeacher(incoming());
+      allow update: if (isAdmin() || isOwnerOfTeacherProfile(teacherId)) && isValidTeacher(incoming());
       allow delete: if isAdmin();
+    }
+
+    // Exams collection
+    match /exams/{examId} {
+      allow read: if isSignedIn();
+      allow create: if (isAdmin() || isTeacher()) && isValidExam(incoming());
+      allow update: if (isAdmin() || (isTeacher() && existing().teacherId == incoming().teacherId)) && isValidExam(incoming());
+      allow delete: if isAdmin() || (isTeacher() && exists(/databases/$(database)/documents/teachers/$(existing().teacherId)) && get(/databases/$(database)/documents/teachers/$(existing().teacherId)).data.userId == request.auth.uid);
     }
 
     // Groups collection

@@ -6,7 +6,7 @@ import {
   signInWithPopup,
   signOut
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { User } from '../types';
 import toast from 'react-hot-toast';
@@ -27,12 +27,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubscribeUserDoc: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (unsubscribeUserDoc) {
+        unsubscribeUserDoc();
+        unsubscribeUserDoc = null;
+      }
+
       if (firebaseUser) {
-        try {
-          // Check if user exists in Firestore
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          
+        unsubscribeUserDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), async (userDoc) => {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             let currentUserRole = userData.role;
@@ -47,7 +51,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
             }
 
-            // If the user's role is student, ensure they have a record in the students collection and it's synced
+            // Auto-detect teacher by email or userId link
+            if (firebaseUser.email) {
+              try {
+                const emailLower = firebaseUser.email.toLowerCase().trim();
+                
+                // 1. Check if this UID is linked to ANY teacher document
+                const qUserId = query(collection(db, 'teachers'), where('userId', '==', firebaseUser.uid));
+                const teacherSnapshotUserId = await getDocs(qUserId);
+                
+                // 2. Check if this EMAIL is linked to ANY teacher document
+                const qByEmail = query(collection(db, 'teachers'), where('email', '==', emailLower));
+                const teacherSnapshotByEmail = await getDocs(qByEmail);
+
+                if (!teacherSnapshotUserId.empty || !teacherSnapshotByEmail.empty) {
+                  const teacherDoc = !teacherSnapshotUserId.empty ? teacherSnapshotUserId.docs[0] : teacherSnapshotByEmail.docs[0];
+                  
+                  // If we found a teacher match, but the user role is still student, upgrade it
+                  if (currentUserRole !== 'teacher' && currentUserRole !== 'admin') {
+                    currentUserRole = 'teacher';
+                    // We don't await here to avoid blocking snapshot unnecessarily, but role is updated locally
+                    updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'teacher' }).catch(console.error);
+                  }
+                  
+                  // Ensure teacher doc is linked to this UID
+                  if (teacherDoc.data().userId !== firebaseUser.uid) {
+                    updateDoc(doc(db, 'teachers', teacherDoc.id), { userId: firebaseUser.uid }).catch(console.error);
+                  }
+                }
+              } catch (e) {
+                console.error("Error auto-detecting teacher role:", e);
+              }
+            }
+
+            // Sync with students collection if role is student
             if (currentUserRole === 'student') {
               const studentDocRef = doc(db, 'students', firebaseUser.uid);
               const studentDoc = await getDoc(studentDocRef);
@@ -68,42 +105,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   createdAt: serverTimestamp(),
                 });
               } else {
-                // Keep name and email in sync if they changed
                 const existingData = studentDoc.data();
                 if (existingData.name !== studentData.name || existingData.email !== studentData.email) {
                   await updateDoc(studentDocRef, studentData);
                 }
               }
             } else {
-              // If they are admin or teacher, make sure they are NOT in the students collection
-              // This addresses "hide moderators from student list"
+              // Delete from students collection if role is not student
               try {
                 const studentDoc = await getDoc(doc(db, 'students', firebaseUser.uid));
                 if (studentDoc.exists()) {
                   await deleteDoc(doc(db, 'students', firebaseUser.uid));
                 }
               } catch (e) {
-                // Ignore errors here
+                // Ignore
               }
             }
 
             setUser({ id: userDoc.id, ...userData, role: currentUserRole } as User);
           } else {
             // Create new user profile
-            const isAdmin = firebaseUser.email === 'canva40478@gmail.com';
+            const isAdmin = firebaseUser.email?.toLowerCase() === 'canva40478@gmail.com';
+            let initialRole = isAdmin ? 'admin' : 'student';
+            
+            // Check if email belongs to a teacher or userId is linked
+            if (!isAdmin && firebaseUser.email) {
+              try {
+                const emailLower = firebaseUser.email.toLowerCase().trim();
+                const qByEmail = query(collection(db, 'teachers'), where('email', '==', emailLower));
+                const teacherSnapshot = await getDocs(qByEmail);
+                
+                if (!teacherSnapshot.empty) {
+                  initialRole = 'teacher';
+                  const teacherDoc = teacherSnapshot.docs[0];
+                  await updateDoc(doc(db, 'teachers', teacherDoc.id), { userId: firebaseUser.uid });
+                }
+              } catch (e) {
+                console.error("Error checking for teacher during registration:", e);
+              }
+            }
+
             const newUser: Partial<User> = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || '',
               photoURL: firebaseUser.photoURL || '',
-              role: isAdmin ? 'admin' : 'student',
+              role: initialRole as any,
               createdAt: serverTimestamp(),
             };
+            
             try {
               await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
               
-              // If the new user is a student, also add them to the students collection
-              if (newUser.role === 'student') {
+              if (initialRole === 'student') {
                 const pendingGradeId = localStorage.getItem('pending_grade_id');
                 await setDoc(doc(db, 'students', firebaseUser.uid), {
                   name: firebaseUser.displayName || 'طالب جديد',
@@ -121,22 +175,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   localStorage.setItem('edu_center_grade_id', pendingGradeId);
                 }
               }
-              
-              setUser({ id: firebaseUser.uid, ...newUser } as User);
             } catch (e) {
               handleFirestoreError(e, OperationType.WRITE, `users/${firebaseUser.uid}`);
             }
           }
-        } catch (error) {
-          console.error("Error loading user profile:", error);
-        }
+          setLoading(false);
+        });
       } else {
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUserDoc) unsubscribeUserDoc();
+    };
   }, []);
 
   const login = async () => {

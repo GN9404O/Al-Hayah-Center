@@ -15,7 +15,7 @@ export interface User {
   email: string;
   displayName: string;
   photoURL: string;
-  role: 'admin' | 'staff' | 'student';
+  role: 'admin' | 'staff' | 'student' | 'teacher';
   createdAt: any;
 }
 
@@ -28,6 +28,7 @@ export interface Grade {
 export interface Teacher {
   id: string;
   name: string;
+  email?: string;
   phone: string;
   subject: string;
   photoURL?: string;
@@ -41,6 +42,7 @@ export interface Teacher {
     instagram?: string;
     youtube?: string;
   };
+  userId?: string;
   createdAt: any;
 }
 
