@@ -986,7 +986,7 @@ export function StudentPortal() {
                                     : "bg-[#F0F7FF] border-[#E1EFFF]"
                                 )}
                               >
-                                <div className="flex-1 px-4 text-left md:text-right">
+                                <div className="flex-1 px-4 text-right">
                                   <p className={cn(
                                     "text-lg font-bold leading-tight",
                                     isEven ? "text-[#4A0E0E]" : "text-[#0E2A4A]"
@@ -1293,24 +1293,28 @@ export function StudentPortal() {
             {/* Sidebar Content */}
             <div className={`lg:col-span-4 flex flex-col gap-6 ${activeTab !== 'subjects' && activeTab !== 'schedule' && activeTab !== 'exams' && activeTab !== 'account' ? 'hidden' : 'flex'}`}>
               {/* Important Alerts */}
-              {activeTab !== 'account' && (
+              {activeTab !== 'account' && settings?.alertsEnabled && settings?.alertsContent && (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-50">
                   <h3 className="text-lg font-bold text-gray-900 mb-6">تنبيهات هامة</h3>
                   <div className="space-y-4">
-                    <div className="flex gap-4 p-3 bg-red-50 rounded-lg">
-                      <span className="material-symbols-outlined text-red-500">priority_high</span>
-                      <div>
-                        <p className="text-sm font-bold text-red-900">تسليم مشروع الفيزياء</p>
-                        <p className="text-xs text-gray-500">باقي يوم واحد فقط</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-4 p-3 bg-blue-50 rounded-lg">
-                      <span className="material-symbols-outlined text-blue-600">event</span>
-                      <div>
-                        <p className="text-sm font-bold text-blue-900">اختبار الكيمياء الشهري</p>
-                        <p className="text-xs text-gray-500">الخميس القادم</p>
-                      </div>
-                    </div>
+                    {settings.alertsContent.split('\n\n').filter(Boolean).map((alertBlock, idx) => {
+                      const lines = alertBlock.split('\n').filter(Boolean);
+                      const title = lines[0];
+                      const subtitle = lines.slice(1).join(' ');
+                      const isRed = idx % 2 === 0;
+                      
+                      return (
+                        <div key={idx} className={cn("flex gap-4 p-3 rounded-lg", isRed ? "bg-red-50" : "bg-blue-50")}>
+                          <span className={cn("material-symbols-outlined", isRed ? "text-red-500" : "text-blue-600")}>
+                            {isRed ? "priority_high" : "event"}
+                          </span>
+                          <div>
+                            <p className={cn("text-sm font-bold", isRed ? "text-red-900" : "text-blue-900")}>{title}</p>
+                            {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

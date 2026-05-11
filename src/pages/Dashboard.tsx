@@ -118,7 +118,41 @@ const formatTime12h = (time: string) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="lg:col-span-2 p-8">
+        {settings?.alertsEnabled && settings?.alertsContent && (
+          <Card className="p-8 border-r-4 border-red-500 bg-red-50/10">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                التنبيهات النشطة حالياً
+              </h3>
+              <Badge variant="danger" className="animate-pulse">نشط الآن</Badge>
+            </div>
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              {settings.alertsContent.split('\n\n').filter(Boolean).map((alertBlock, idx) => {
+                const lines = alertBlock.split('\n').filter(Boolean);
+                const title = lines[0];
+                const subtitle = lines.slice(1).join(' ');
+                return (
+                  <div key={idx} className="p-4 bg-white rounded-xl border border-red-100 shadow-sm">
+                    <p className="font-bold text-red-900 mb-1">{title}</p>
+                    {subtitle && <p className="text-xs text-gray-500 leading-relaxed">{subtitle}</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-6 pt-6 border-t border-red-100/50 flex justify-end">
+              <Button 
+                variant="ghost" 
+                onClick={() => window.location.href = '/settings'}
+                className="text-xs text-blue-600 font-bold hover:bg-blue-50"
+              >
+                تعديل التنبيهات من الإعدادات
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        <Card className={cn("p-8", settings?.alertsEnabled && settings?.alertsContent ? "lg:col-span-2" : "lg:col-span-3")}>
           <div className="flex justify-between items-center mb-8">
             <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
               <Activity className="w-5 h-5 text-blue-600" />
