@@ -47,19 +47,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
             }
 
-            // If the user's role is student, ensure they have a record in the students collection
+            // If the user's role is student, ensure they have a record in the students collection and it's synced
             if (currentUserRole === 'student') {
-              const studentDoc = await getDoc(doc(db, 'students', firebaseUser.uid));
+              const studentDocRef = doc(db, 'students', firebaseUser.uid);
+              const studentDoc = await getDoc(studentDocRef);
+              
+              const studentData = {
+                name: firebaseUser.displayName || 'طالب جديد',
+                email: firebaseUser.email || '',
+                updatedAt: serverTimestamp(),
+              };
+
               if (!studentDoc.exists()) {
-                await setDoc(doc(db, 'students', firebaseUser.uid), {
-                  name: firebaseUser.displayName || 'طالب جديد',
-                  email: firebaseUser.email || '',
+                await setDoc(studentDocRef, {
+                  ...studentData,
                   phone: '',
                   parentPhone: '',
                   gradeId: localStorage.getItem('edu_center_grade_id') || '',
                   groupId: '',
                   createdAt: serverTimestamp(),
                 });
+              } else {
+                // Keep name and email in sync if they changed
+                const existingData = studentDoc.data();
+                if (existingData.name !== studentData.name || existingData.email !== studentData.email) {
+                  await updateDoc(studentDocRef, studentData);
+                }
               }
             } else {
               // If they are admin or teacher, make sure they are NOT in the students collection
@@ -100,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   gradeId: pendingGradeId || '',
                   groupId: '',
                   createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
                 });
                 
                 if (pendingGradeId) {

@@ -14,7 +14,6 @@ export function Students() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
@@ -39,8 +38,15 @@ export function Students() {
     const unsubGroups = onSnapshot(collection(db, 'groups'), (snapshot) => {
       setGroups(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Group)));
     });
-    const unsubStudents = onSnapshot(query(collection(db, 'students'), orderBy('createdAt', 'desc')), (snapshot) => {
-      setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student)));
+    const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
+      const allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+      // Sort in memory to avoid filtering docs missing the orderBy field
+      const sortedStudents = allStudents.sort((a, b) => {
+        const dateA = a.createdAt?.toMillis?.() || 0;
+        const dateB = b.createdAt?.toMillis?.() || 0;
+        return dateB - dateA;
+      });
+      setStudents(sortedStudents);
       setLoading(false);
     });
 
@@ -88,44 +94,6 @@ export function Students() {
       setIsConfirmOpen(false);
     } catch (error) {
       toast.error('حدث خطأ أثناء الحذف');
-    }
-  };
-
-  const handleSyncStudents = async () => {
-    setSyncing(true);
-    try {
-      const usersSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
-      let recoveredCount = 0;
-      
-      for (const userDoc of usersSnap.docs) {
-        const userId = userDoc.id;
-        const userData = userDoc.data();
-        
-        const studentSnap = await getDoc(doc(db, 'students', userId));
-        if (!studentSnap.exists()) {
-          await setDoc(doc(db, 'students', userId), {
-            name: userData.name || userData.displayName || 'طالب جديد',
-            email: userData.email || '',
-            phone: userData.phone || '',
-            parentPhone: '',
-            gradeId: '',
-            groupId: '',
-            createdAt: serverTimestamp(),
-          });
-          recoveredCount++;
-        }
-      }
-      
-      if (recoveredCount > 0) {
-        toast.success(`تم استرجاع ${recoveredCount} من الطلاب`);
-      } else {
-        toast('كل الطلاب الحاليين مسجلين بالفعل');
-      }
-    } catch (error) {
-      console.error('Error syncing students:', error);
-      toast.error('حدث خطأ أثناء المزامنة');
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -181,15 +149,6 @@ export function Students() {
           <p className="text-gray-500">إدارة بيانات الطلاب المسجلين</p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleSyncStudents} 
-            disabled={syncing}
-            className="gap-2 rounded-xl border-gray-200"
-          >
-            <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
-            <span>مزامنة الطلاب</span>
-          </Button>
           <Button onClick={() => openModal()} className="gap-2 rounded-xl">
             <Plus className="w-5 h-5" />
             <span>إضافة طالب</span>

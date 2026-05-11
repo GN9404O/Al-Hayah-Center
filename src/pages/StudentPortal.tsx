@@ -536,14 +536,20 @@ export function StudentPortal() {
               className="fixed top-0 right-0 h-full w-80 bg-white z-[70] shadow-2xl flex flex-col p-6 rtl"
               dir="rtl"
             >
-              <div className="flex items-center justify-between mb-10 pb-6 border-b border-gray-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-xl">
-                    {settings?.systemName?.charAt(0) || 'E'}
+              <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-50">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center overflow-hidden border border-blue-100">
+                    {user?.photoURL ? (
+                      <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-blue-600 font-black text-xl bg-blue-50">
+                        {user?.displayName?.charAt(0)}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <h2 className="font-black text-gray-900 leading-none">{settings?.systemName || 'إديو سنتر'}</h2>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">المنصة التعليمية الشاملة</p>
+                  <div className="flex-grow min-w-0">
+                    <p className="font-bold text-gray-900 truncate leading-tight">{user?.displayName}</p>
+                    <p className="text-xs text-gray-400 truncate mt-0.5">{user?.email}</p>
                   </div>
                 </div>
                 <button 
@@ -653,22 +659,6 @@ export function StudentPortal() {
               </div>
 
               <div className="mt-auto pt-6 border-t border-gray-50 space-y-4">
-                <div className="flex items-center gap-4 p-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center overflow-hidden">
-                    {user?.photoURL ? (
-                      <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-blue-600 font-black text-xl bg-blue-50">
-                        {user?.displayName?.charAt(0)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-grow min-w-0">
-                    <p className="font-bold text-gray-900 truncate">{user?.displayName}</p>
-                    <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-                  </div>
-                </div>
-
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-red-50 text-red-500 font-black transition-all group"
