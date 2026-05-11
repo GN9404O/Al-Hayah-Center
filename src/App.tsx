@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { DashboardLayout } from './components/layout/DashboardLayout';
@@ -70,5 +70,3 @@ function AdminRoute({ children }: { children?: React.ReactNode }) {
   
   return <>{children || <Outlet />}</>;
 }
-
-import { Outlet, Navigate } from 'react-router-dom';
