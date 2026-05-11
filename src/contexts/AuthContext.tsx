@@ -6,7 +6,7 @@ import {
   signInWithPopup,
   signOut
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { User } from '../types';
 import toast from 'react-hot-toast';
@@ -35,17 +35,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            // Force admin role if email matches, otherwise respect Firestore data
+            let currentUserRole = userData.role;
+
+            // Force admin role if email matches
             if (firebaseUser.email === 'canva40478@gmail.com' && userData.role !== 'admin') {
+              currentUserRole = 'admin';
               try {
                 await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'admin' });
               } catch (e) {
                 console.error("Failed to update admin role:", e);
               }
-              setUser({ id: userDoc.id, ...userData, role: 'admin' } as User);
-            } else {
-              setUser({ id: userDoc.id, ...userData } as User);
             }
+
+            // If the user's role is student, ensure they have a record in the students collection
+            if (currentUserRole === 'student') {
+              const studentDoc = await getDoc(doc(db, 'students', firebaseUser.uid));
+              if (!studentDoc.exists()) {
+                await setDoc(doc(db, 'students', firebaseUser.uid), {
+                  name: firebaseUser.displayName || 'طالب جديد',
+                  email: firebaseUser.email || '',
+                  phone: '',
+                  parentPhone: '',
+                  gradeId: localStorage.getItem('edu_center_grade_id') || '',
+                  groupId: '',
+                  createdAt: serverTimestamp(),
+                });
+              }
+            } else {
+              // If they are admin or teacher, make sure they are NOT in the students collection
+              // This addresses "hide moderators from student list"
+              try {
+                const studentDoc = await getDoc(doc(db, 'students', firebaseUser.uid));
+                if (studentDoc.exists()) {
+                  await deleteDoc(doc(db, 'students', firebaseUser.uid));
+                }
+              } catch (e) {
+                // Ignore errors here
+              }
+            }
+
+            setUser({ id: userDoc.id, ...userData, role: currentUserRole } as User);
           } else {
             // Create new user profile
             const isAdmin = firebaseUser.email === 'canva40478@gmail.com';
@@ -62,15 +91,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               
               // If the new user is a student, also add them to the students collection
               if (newUser.role === 'student') {
+                const pendingGradeId = localStorage.getItem('pending_grade_id');
                 await setDoc(doc(db, 'students', firebaseUser.uid), {
                   name: firebaseUser.displayName || 'طالب جديد',
                   email: firebaseUser.email || '',
                   phone: '',
                   parentPhone: '',
-                  gradeId: '',
+                  gradeId: pendingGradeId || '',
                   groupId: '',
                   createdAt: serverTimestamp(),
                 });
+                
+                if (pendingGradeId) {
+                  localStorage.removeItem('pending_grade_id');
+                  localStorage.setItem('edu_center_grade_id', pendingGradeId);
+                }
               }
               
               setUser({ id: firebaseUser.uid, ...newUser } as User);

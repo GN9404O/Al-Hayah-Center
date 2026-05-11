@@ -3,10 +3,11 @@ import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, d
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Teacher, Grade } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
-import { Button, Input, Card } from '../components/ui';
+import { Button, Input, Card, cn } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { Plus, Edit2, Trash2, UserSquare2, Loader2, Phone, BookOpen, ImageIcon, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, UserSquare2, Loader2, Phone, BookOpen, ImageIcon, Check, Filter, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 
 export function Teachers() {
@@ -17,6 +18,8 @@ export function Teachers() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
   const [currentTeacher, setCurrentTeacher] = useState<Teacher | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [formData, setFormData] = useState({ 
     name: '', 
     phone: '', 
@@ -33,6 +36,15 @@ export function Teachers() {
       youtube: ''
     }
   });
+
+  const subjects = React.useMemo(() => {
+    return Array.from(new Set(teachers.map(t => t.subject))).filter(Boolean);
+  }, [teachers]);
+
+  const filteredTeachers = React.useMemo(() => {
+    if (!selectedSubject) return teachers;
+    return teachers.filter(t => t.subject === selectedSubject);
+  }, [teachers, selectedSubject]);
 
   useEffect(() => {
     const unsubTeachers = onSnapshot(query(collection(db, 'teachers'), orderBy('createdAt', 'desc')), (snapshot) => {
@@ -233,14 +245,77 @@ export function Teachers() {
         </div>
       </div>
 
+      {subjects.length > 0 && (
+        <div className="relative inline-block text-right">
+          <Button
+            variant="outline"
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            className="gap-2 rounded-xl border-gray-200 bg-white"
+          >
+            <Filter className="w-4 h-4 text-gray-400" />
+            <span className="font-bold">{selectedSubject || 'كل المواد'}</span>
+            <ChevronDown className={cn("w-4 h-4 text-gray-400 transition-transform", isFilterOpen && "rotate-180")} />
+          </Button>
+
+          <AnimatePresence>
+            {isFilterOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setIsFilterOpen(false)}
+                />
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute right-0 mt-2 w-56 bg-white border border-gray-100 rounded-2xl shadow-xl z-20 overflow-hidden"
+                >
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={() => {
+                        setSelectedSubject(null);
+                        setIsFilterOpen(false);
+                      }}
+                      className={cn(
+                        "w-full text-right px-4 py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-between",
+                        selectedSubject === null ? "bg-blue-50 text-blue-600" : "text-gray-600 hover:bg-gray-50"
+                      )}
+                    >
+                      <span>الكل</span>
+                      {selectedSubject === null && <Check className="w-4 h-4" />}
+                    </button>
+                    {subjects.map(sub => (
+                      <button
+                        key={sub}
+                        onClick={() => {
+                          setSelectedSubject(sub);
+                          setIsFilterOpen(false);
+                        }}
+                        className={cn(
+                          "w-full text-right px-4 py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-between",
+                          selectedSubject === sub ? "bg-blue-50 text-blue-600" : "text-gray-600 hover:bg-gray-50"
+                        )}
+                      >
+                        <span>{sub}</span>
+                        {selectedSubject === sub && <Check className="w-4 h-4" />}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {teachers.length === 0 ? (
+        {filteredTeachers.length === 0 ? (
           <div className="col-span-full py-20 text-center space-y-4">
             <UserSquare2 className="mx-auto w-16 h-16 text-gray-200" />
-            <p className="text-gray-400">لا يوجد معلمون مضافون بعد</p>
+            <p className="text-gray-400">لا يوجد معلمون مطابقون للبحث</p>
           </div>
         ) : (
-          teachers.map((teacher) => (
+          filteredTeachers.map((teacher) => (
             <Card key={teacher.id} className="group hover:border-blue-200 transition-all duration-300 overflow-hidden">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">

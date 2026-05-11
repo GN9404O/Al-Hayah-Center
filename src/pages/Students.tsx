@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, where, getDocs, getDoc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Student, Grade, Group } from '../types';
 import { ACADEMIC_STAGES, getGradeNameById } from '../constants';
-import { Button, Input, Card, Badge } from '../components/ui';
+import { Button, Input, Card, Badge, cn } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { Plus, Edit2, Trash2, Users2, Loader2, Phone, Search, Filter } from 'lucide-react';
+import { Plus, Edit2, Trash2, Users2, Loader2, Phone, Search, Filter, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function Students() {
@@ -14,6 +14,7 @@ export function Students() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
@@ -83,10 +84,48 @@ export function Students() {
     if (!currentStudent) return;
     try {
       await deleteDoc(doc(db, 'students', currentStudent.id));
-      toast.success('تم حذف الطالب');
+      toast.success('تم حذف الطالب من القائمة');
       setIsConfirmOpen(false);
     } catch (error) {
       toast.error('حدث خطأ أثناء الحذف');
+    }
+  };
+
+  const handleSyncStudents = async () => {
+    setSyncing(true);
+    try {
+      const usersSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+      let recoveredCount = 0;
+      
+      for (const userDoc of usersSnap.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        
+        const studentSnap = await getDoc(doc(db, 'students', userId));
+        if (!studentSnap.exists()) {
+          await setDoc(doc(db, 'students', userId), {
+            name: userData.name || userData.displayName || 'طالب جديد',
+            email: userData.email || '',
+            phone: userData.phone || '',
+            parentPhone: '',
+            gradeId: '',
+            groupId: '',
+            createdAt: serverTimestamp(),
+          });
+          recoveredCount++;
+        }
+      }
+      
+      if (recoveredCount > 0) {
+        toast.success(`تم استرجاع ${recoveredCount} من الطلاب`);
+      } else {
+        toast('كل الطلاب الحاليين مسجلين بالفعل');
+      }
+    } catch (error) {
+      console.error('Error syncing students:', error);
+      toast.error('حدث خطأ أثناء المزامنة');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -141,10 +180,21 @@ export function Students() {
           <h1 className="text-2xl font-black text-gray-900">الطلاب</h1>
           <p className="text-gray-500">إدارة بيانات الطلاب المسجلين</p>
         </div>
-        <Button onClick={() => openModal()} className="gap-2 rounded-xl">
-          <Plus className="w-5 h-5" />
-          <span>إضافة طالب</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleSyncStudents} 
+            disabled={syncing}
+            className="gap-2 rounded-xl border-gray-200"
+          >
+            <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
+            <span>مزامنة الطلاب</span>
+          </Button>
+          <Button onClick={() => openModal()} className="gap-2 rounded-xl">
+            <Plus className="w-5 h-5" />
+            <span>إضافة طالب</span>
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">

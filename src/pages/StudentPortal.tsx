@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { Grade, Schedule, Group, Teacher } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
-import { LogOut, Search, Clock, MapPin, Send, MessageSquare, AlertCircle, Facebook, Instagram, Twitter, Youtube, Phone, Info, Star, ShieldCheck, Mail, Share2, X } from 'lucide-react';
+import { LogOut, Search, Clock, MapPin, Send, MessageSquare, AlertCircle, Facebook, Instagram, Twitter, Youtube, Phone, Info, Star, ShieldCheck, Mail, Share2, X, ChevronDown, Filter, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -28,8 +28,10 @@ export function StudentPortal() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDataInitialized, setIsDataInitialized] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'schedule' | 'subjects' | 'account'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'schedule' | 'subjects' | 'exams' | 'account'>('home');
   const [selectedTeacherProfile, setSelectedTeacherProfile] = useState<Teacher | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('edu_center_grade_id');
@@ -49,6 +51,10 @@ export function StudentPortal() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setStudentProfile({ id: docSnap.id, ...data });
+        // Auto-select grade from profile if available
+        if (data.gradeId && !selectedGradeId) {
+          setSelectedGradeId(data.gradeId);
+        }
       } else {
         setStudentProfile(null);
       }
@@ -130,30 +136,25 @@ export function StudentPortal() {
   }, [selectedGradeId, isProfileLoaded]);
 
   const subjects = useMemo(() => {
-    if (!selectedGradeId) return [];
-    // Get subjects from all teachers assigned to this grade
-    const teacherSubjects = teachers
-      .filter(t => t.gradeIds?.includes(selectedGradeId))
-      .map(t => t.subject);
+    // Get subjects from all teachers
+    const teacherSubjects = teachers.map(t => t.subject);
     
-    // Also include subjects from groups just in case
+    // Also include subjects from groups
     const groupSubjects = groups.map(g => g.subject);
     
     const allSubjects = new Set([...teacherSubjects, ...groupSubjects]);
-    return Array.from(allSubjects);
-  }, [teachers, groups, selectedGradeId]);
+    return Array.from(allSubjects).filter(Boolean);
+  }, [teachers, groups]);
 
   const filteredTeachers = useMemo(() => {
-    if (!selectedGradeId) return [];
-    
-    let filtered = teachers.filter(t => t.gradeIds?.includes(selectedGradeId));
+    let filtered = [...teachers];
     
     if (selectedSubject) {
       filtered = filtered.filter(t => t.subject === selectedSubject);
     }
     
     return filtered;
-  }, [selectedSubject, selectedGradeId, teachers]);
+  }, [selectedSubject, teachers]);
 
   const getCurrentDay = () => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -261,8 +262,8 @@ export function StudentPortal() {
       }, { merge: true });
 
       // Update Auth Profile
-      if (user) {
-        await updateProfile(user, { displayName: name });
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName: name });
       }
 
       toast.success('تم إكمال بيانات الملف الشخصي بنجاح');
@@ -489,13 +490,13 @@ export function StudentPortal() {
     <div className="min-h-screen bg-[#f7f9ff] font-sans pb-32 rtl" dir="rtl">
       {/* Top App Bar - New Design */}
       <header className="bg-[#005bbf] shadow-md sticky top-0 z-50">
-        <div className="flex justify-between items-center px-gutter w-full h-20 max-w-7xl mx-auto">
+        <div className="flex justify-between items-center px-10 w-full h-20 max-w-7xl mx-auto">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => setSelectedGradeId(null)}
-              className="text-white hover:bg-white/10 transition-colors p-2 rounded-full"
+              onClick={() => setIsSidebarOpen(true)}
+              className="text-white hover:bg-white/10 transition-colors p-1.5 rounded-full"
             >
-              <span className="material-symbols-outlined">menu</span>
+              <span className="material-symbols-outlined text-4xl">menu</span>
             </button>
             <h1 className="text-xl md:text-2xl font-bold text-white leading-none">{settings?.systemName || 'إديو سنتر'}</h1>
           </div>
@@ -513,6 +514,176 @@ export function StudentPortal() {
         </div>
       </header>
 
+      {/* Side Menu Drawer */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60]"
+            />
+            
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 right-0 h-full w-80 bg-white z-[70] shadow-2xl flex flex-col p-6 rtl"
+              dir="rtl"
+            >
+              <div className="flex items-center justify-between mb-10 pb-6 border-b border-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-xl">
+                    {settings?.systemName?.charAt(0) || 'E'}
+                  </div>
+                  <div>
+                    <h2 className="font-black text-gray-900 leading-none">{settings?.systemName || 'إديو سنتر'}</h2>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">المنصة التعليمية الشاملة</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors group"
+                >
+                  <X className="w-6 h-6 text-gray-400 group-hover:text-red-500 transition-colors" />
+                </button>
+              </div>
+
+              <div className="flex-grow space-y-2">
+                <button
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    setActiveTab('home');
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
+                    activeTab === 'home' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
+                  )}
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'home' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
+                    <span className="material-symbols-outlined">dashboard</span>
+                  </div>
+                  <span>الرئيسية</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    setActiveTab('schedule');
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
+                    activeTab === 'schedule' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
+                  )}
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'schedule' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
+                    <span className="material-symbols-outlined">calendar_month</span>
+                  </div>
+                  <span>الجدول الدراسي</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    setActiveTab('exams');
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
+                    activeTab === 'exams' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
+                  )}
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'exams' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
+                    <span className="material-symbols-outlined">quiz</span>
+                  </div>
+                  <span>الاختبارات</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    setActiveTab('subjects');
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
+                    activeTab === 'subjects' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
+                  )}
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'subjects' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
+                    <span className="material-symbols-outlined">school</span>
+                  </div>
+                  <span>المعلمون</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    setActiveTab('account');
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
+                    activeTab === 'account' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
+                  )}
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'account' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
+                    <span className="material-symbols-outlined">person</span>
+                  </div>
+                  <span>حسابي</span>
+                </button>
+
+                <div className="pt-4 mt-2 border-t border-gray-50">
+                  <button
+                    onClick={() => {
+                      setIsSidebarOpen(false);
+                      setSelectedGradeId(null);
+                      setSelectedStageId(null);
+                    }}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-blue-50 text-gray-700 hover:text-blue-600 font-bold transition-all group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                      <span className="material-symbols-outlined text-gray-400 group-hover:text-blue-600">swap_horiz</span>
+                    </div>
+                    <span>تغيير المرحلة الدراسية</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-auto pt-6 border-t border-gray-50 space-y-4">
+                <div className="flex items-center gap-4 p-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center overflow-hidden">
+                    {user?.photoURL ? (
+                      <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-blue-600 font-black text-xl bg-blue-50">
+                        {user?.displayName?.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <p className="font-bold text-gray-900 truncate">{user?.displayName}</p>
+                    <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-red-50 text-red-500 font-black transition-all group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center group-hover:bg-red-100 transition-colors">
+                    <LogOut className="w-5 h-5" />
+                  </div>
+                  <span>تسجيل الخروج</span>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <main className="pb-32">
         {selectedTeacherProfile ? (
           <motion.div 
@@ -526,7 +697,7 @@ export function StudentPortal() {
               className="flex items-center gap-2 text-gray-500 hover:text-[#005bbf] font-bold mb-8 transition-colors group"
             >
               <X className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-              العودة للمواد الدراسية
+              العودة لقائمة المعلمين
             </button>
 
             <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-50">
@@ -915,45 +1086,104 @@ export function StudentPortal() {
                 </div>
               )}
 
+              {/* Exams Tab */}
+              {activeTab === 'exams' && (
+                <div className="flex flex-col gap-8">
+                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                    <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-600 mb-6 font-bold">
+                       <span className="material-symbols-outlined text-4xl">quiz</span>
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">الاختبارات والتقييمات</h3>
+                    <p className="text-gray-500 max-w-md mx-auto">هنا ستجد اختباراتك القادمة، نتائج الامتحانات، والتقارير الشهرية لمتابعة مستواك الدراسي.</p>
+                    
+                    <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-right">
+                      <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                        <div className="flex items-center gap-3 mb-2 text-blue-600">
+                          <span className="material-symbols-outlined">assignment</span>
+                          <span className="font-bold text-sm">الاختبارات القادمة</span>
+                        </div>
+                        <p className="text-xs text-gray-400">لا توجد اختبارات مجدولة حالياً لمادتك المختارة.</p>
+                      </div>
+                      <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                        <div className="flex items-center gap-3 mb-2 text-green-600">
+                          <span className="material-symbols-outlined">analytics</span>
+                          <span className="font-bold text-sm">نتائج الاختبارات</span>
+                        </div>
+                        <p className="text-xs text-gray-400">سيتم عرض نتائج اختباراتك الشهرية فور تصحيحها هنا.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Subjects & Teachers Tab */}
               {activeTab === 'subjects' && (
                 <div className="flex flex-col gap-8">
                   <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-6">
                       <div>
-                        <h3 className="text-2xl font-bold text-gray-900 mb-1">المواد الدراسية والمعلمون</h3>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-1">المعلمون</h3>
                         <p className="text-gray-500 text-sm">استكشف نخبة من المعلمين المتميزين في كافة التخصصات.</p>
                       </div>
-                      <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600">
-                        <span className="material-symbols-outlined text-2xl">tune</span>
-                      </div>
-                    </div>
-                    
-                    {/* Subjects Filter */}
-                    <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
-                      <button
-                        onClick={() => setSelectedSubject(null)}
-                        className={`px-8 py-3 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                          selectedSubject === null 
-                            ? 'bg-[#1a73e8] text-white shadow-lg shadow-blue-200' 
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                        }`}
-                      >
-                        الكل
-                      </button>
-                      {subjects.map((sub) => (
+                      <div className="relative">
                         <button
-                          key={sub}
-                          onClick={() => setSelectedSubject(sub)}
-                          className={`px-8 py-3 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                            selectedSubject === sub 
-                              ? 'bg-[#1a73e8] text-white shadow-lg shadow-blue-200' 
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          }`}
+                          onClick={() => setIsFilterOpen(!isFilterOpen)}
+                          className="flex items-center gap-2 px-6 py-3 bg-gray-50 hover:bg-gray-100 rounded-2xl text-gray-600 transition-all font-bold group border border-gray-100"
                         >
-                          {sub}
+                          <Filter className="w-5 h-5 text-gray-400 group-hover:text-[#1a73e8]" />
+                          <span>{selectedSubject || 'كل التخصصات'}</span>
+                          <ChevronDown className={cn("w-5 h-5 text-gray-400 transition-transform", isFilterOpen && "rotate-180")} />
                         </button>
-                      ))}
+
+                        <AnimatePresence>
+                          {isFilterOpen && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-10" 
+                                onClick={() => setIsFilterOpen(false)}
+                              />
+                              <motion.div
+                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                className="absolute left-0 mt-3 w-64 bg-white border border-gray-100 rounded-3xl shadow-2lx z-20 overflow-hidden"
+                              >
+                                <div className="p-3 space-y-1">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedSubject(null);
+                                      setIsFilterOpen(false);
+                                    }}
+                                    className={cn(
+                                      "w-full text-right px-5 py-4 rounded-2xl text-sm font-bold transition-all flex items-center justify-between",
+                                      selectedSubject === null ? "bg-blue-50 text-[#1a73e8]" : "text-gray-600 hover:bg-gray-50"
+                                    )}
+                                  >
+                                    <span>الكل</span>
+                                    {selectedSubject === null && <Check className="w-4 h-4" />}
+                                  </button>
+                                  {subjects.map(sub => (
+                                    <button
+                                      key={sub}
+                                      onClick={() => {
+                                        setSelectedSubject(sub);
+                                        setIsFilterOpen(false);
+                                      }}
+                                      className={cn(
+                                        "w-full text-right px-5 py-4 rounded-2xl text-sm font-bold transition-all flex items-center justify-between",
+                                        selectedSubject === sub ? "bg-blue-50 text-[#1a73e8]" : "text-gray-600 hover:bg-gray-50"
+                                      )}
+                                    >
+                                      <span>{sub}</span>
+                                      {selectedSubject === sub && <Check className="w-4 h-4" />}
+                                    </button>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
                   </div>
 
@@ -1071,27 +1301,29 @@ export function StudentPortal() {
             </div>
 
             {/* Sidebar Content */}
-            <div className={`lg:col-span-4 flex flex-col gap-6 ${activeTab !== 'subjects' && activeTab !== 'schedule' && activeTab !== 'account' ? 'hidden' : 'flex'}`}>
+            <div className={`lg:col-span-4 flex flex-col gap-6 ${activeTab !== 'subjects' && activeTab !== 'schedule' && activeTab !== 'exams' && activeTab !== 'account' ? 'hidden' : 'flex'}`}>
               {/* Important Alerts */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-50">
-                <h3 className="text-lg font-bold text-gray-900 mb-6">تنبيهات هامة</h3>
-                <div className="space-y-4">
-                  <div className="flex gap-4 p-3 bg-red-50 rounded-lg">
-                    <span className="material-symbols-outlined text-red-500">priority_high</span>
-                    <div>
-                      <p className="text-sm font-bold text-red-900">تسليم مشروع الفيزياء</p>
-                      <p className="text-xs text-gray-500">باقي يوم واحد فقط</p>
+              {activeTab !== 'account' && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-50">
+                  <h3 className="text-lg font-bold text-gray-900 mb-6">تنبيهات هامة</h3>
+                  <div className="space-y-4">
+                    <div className="flex gap-4 p-3 bg-red-50 rounded-lg">
+                      <span className="material-symbols-outlined text-red-500">priority_high</span>
+                      <div>
+                        <p className="text-sm font-bold text-red-900">تسليم مشروع الفيزياء</p>
+                        <p className="text-xs text-gray-500">باقي يوم واحد فقط</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-4 p-3 bg-blue-50 rounded-lg">
-                    <span className="material-symbols-outlined text-blue-600">event</span>
-                    <div>
-                      <p className="text-sm font-bold text-blue-900">اختبار الكيمياء الشهري</p>
-                      <p className="text-xs text-gray-500">الخميس القادم</p>
+                    <div className="flex gap-4 p-3 bg-blue-50 rounded-lg">
+                      <span className="material-symbols-outlined text-blue-600">event</span>
+                      <div>
+                        <p className="text-sm font-bold text-blue-900">اختبار الكيمياء الشهري</p>
+                        <p className="text-xs text-gray-500">الخميس القادم</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Help Card */}
               <div className="relative overflow-hidden rounded-xl h-48 bg-[#151c24] text-white flex items-center p-8">
@@ -1115,11 +1347,11 @@ export function StudentPortal() {
       </main>
 
       {/* Bottom Display Navigation - New Design */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 pb-6 bg-white border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] rounded-t-3xl md:bg-transparent md:border-none md:shadow-none md:static md:max-w-7xl md:mx-auto md:px-6 md:pb-8">
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-6 bg-white border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] rounded-t-3xl md:bg-transparent md:border-none md:shadow-none md:static md:max-w-7xl md:mx-auto md:px-6 md:pb-8">
         {/* Home (Active/Normal) */}
         <button 
           onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center justify-center transition-all px-6 py-2 rounded-2xl ${activeTab === 'home' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'home' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'home' ? "'FILL' 1" : "'FILL' 0" }}>dashboard</span>
           <span className="text-[10px] font-bold mt-1">الرئيسية</span>
@@ -1128,25 +1360,34 @@ export function StudentPortal() {
         {/* Schedule */}
         <button 
           onClick={() => setActiveTab('schedule')}
-          className={`flex flex-col items-center justify-center transition-all px-6 py-2 rounded-2xl ${activeTab === 'schedule' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'schedule' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'schedule' ? "'FILL' 1" : "'FILL' 0" }}>calendar_month</span>
           <span className="text-[10px] font-bold mt-1">الجدول</span>
         </button>
 
+        {/* Exams */}
+        <button 
+          onClick={() => setActiveTab('exams')}
+          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'exams' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+        >
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'exams' ? "'FILL' 1" : "'FILL' 0" }}>quiz</span>
+          <span className="text-[10px] font-bold mt-1">الاختبارات</span>
+        </button>
+
         {/* Subjects */}
         <button 
           onClick={() => setActiveTab('subjects')}
-          className={`flex flex-col items-center justify-center transition-all px-6 py-2 rounded-2xl ${activeTab === 'subjects' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'subjects' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'subjects' ? "'FILL' 1" : "'FILL' 0" }}>school</span>
-          <span className="text-[10px] font-bold mt-1">الفصول</span>
+          <span className="text-[10px] font-bold mt-1">المعلمون</span>
         </button>
 
         {/* Profile */}
         <button 
           onClick={() => setActiveTab('account')}
-          className={`flex flex-col items-center justify-center transition-all px-6 py-2 rounded-2xl ${activeTab === 'account' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'account' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'account' ? "'FILL' 1" : "'FILL' 0" }}>person</span>
           <span className="text-[10px] font-bold mt-1">حسابي</span>

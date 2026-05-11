@@ -23,6 +23,18 @@ export function Register() {
     return unsub;
   }, []);
 
+  const handleRegisterWithGoogle = () => {
+    if (!selectedGradeId) {
+      alert('الرجاء اختيار الصف الدراسي أولاً');
+      return;
+    }
+    // Save selection to localStorage for AuthContext to pick up
+    localStorage.setItem('pending_grade_id', selectedGradeId);
+    login().catch(() => {
+      localStorage.removeItem('pending_grade_id');
+    });
+  };
+
   if (user) {
     return <Navigate to="/" replace />;
   }
@@ -58,40 +70,10 @@ export function Register() {
           >
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">إنشاء حساب جديد</h2>
-              <p className="text-gray-500 text-sm">انضم إلينا وابدأ رحلتك التعليمية اليوم</p>
+              <p className="text-gray-500 text-sm">انضم إلينا وابدأ رحلتك اليوم - اختر مرحلتك الدراسية وسجل دخولك</p>
             </div>
 
-            <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
-              <div className="flex flex-col">
-                <label className="text-xs font-bold text-gray-600 mb-2 px-1" htmlFor="name">الاسم الكامل</label>
-                <input 
-                  className="w-full bg-gray-50 border-none focus:ring-2 focus:ring-blue-600 focus:bg-white rounded-xl p-4 text-right transition-all placeholder:text-gray-300"
-                  id="name" 
-                  placeholder="محمد أحمد" 
-                  type="text"
-                />
-              </div>
-
-              <div className="flex flex-col">
-                <label className="text-xs font-bold text-gray-600 mb-2 px-1" htmlFor="email">البريد الإلكتروني</label>
-                <input 
-                  className="w-full bg-gray-50 border-none focus:ring-2 focus:ring-blue-600 focus:bg-white rounded-xl p-4 text-right transition-all placeholder:text-gray-300"
-                  id="email" 
-                  placeholder="example@educenter.com" 
-                  type="email"
-                />
-              </div>
-
-              <div className="flex flex-col">
-                <label className="text-xs font-bold text-gray-600 mb-2 px-1" htmlFor="password">كلمة المرور</label>
-                <input 
-                  className="w-full bg-gray-50 border-none focus:ring-2 focus:ring-blue-600 focus:bg-white rounded-xl p-4 text-right transition-all placeholder:text-gray-300"
-                  id="password" 
-                  placeholder="••••••••" 
-                  type="password"
-                />
-              </div>
-
+            <div className="space-y-6">
               <div className="flex flex-col">
                 <label className="text-xs font-bold text-gray-600 mb-2 px-1">المرحلة الدراسية</label>
                 <select 
@@ -132,30 +114,22 @@ export function Register() {
                 )}
               </div>
 
-              <button 
-                className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg active:scale-[0.98] cursor-not-allowed opacity-50"
-                type="button"
-                disabled
-              >
-                إنشاء الحساب
-              </button>
-
               <div className="relative flex items-center py-2">
                 <div className="flex-grow border-t border-gray-100"></div>
-                <span className="flex-shrink mx-4 text-gray-300 text-xs font-medium">أو</span>
+                <span className="flex-shrink mx-4 text-gray-300 text-xs font-medium">سجل للمتابعة</span>
                 <div className="flex-grow border-t border-gray-100"></div>
               </div>
 
               <button 
-                onClick={login}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-3 border-2 border-gray-50 py-4 rounded-2xl hover:bg-gray-50 hover:border-gray-100 transition-all text-sm font-bold text-gray-700 shadow-sm active:scale-[0.98]" 
+                onClick={handleRegisterWithGoogle}
+                disabled={loading || !selectedGradeId}
+                className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-100 py-4 rounded-2xl hover:bg-gray-50 hover:border-blue-200 transition-all text-sm font-bold text-gray-700 shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed" 
                 type="button"
               >
                 <img alt="Google Logo" className="w-5 h-5" src="https://www.google.com/favicon.ico" />
-                <span>الدخول بواسطة جوجل</span>
+                <span>التسجيل بواسطة جوجل</span>
               </button>
-            </form>
+            </div>
 
             <div className="mt-8 text-center">
               <p className="text-gray-500 text-sm">لديك حساب بالفعل؟ <Link to="/login" className="text-blue-600 font-black hover:underline">تسجيل الدخول</Link></p>
