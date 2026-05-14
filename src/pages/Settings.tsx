@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Card, Button, Input, cn } from '../components/ui';
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, onSnapshot, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { User as UserIcon, Shield, Bell, Lock, Globe, Settings as SettingsIcon, Search, Trash2, ShieldAlert } from 'lucide-react';
+import { User as UserIcon, Shield, Bell, Lock, Globe, Settings as SettingsIcon, Search, Trash2, ShieldAlert, Check, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function Settings() {
@@ -26,6 +26,13 @@ export function Settings() {
   const [adminEmails, setAdminEmails] = useState<{id: string, email: string, name: string}[]>([]);
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [isAdminLoading, setIsAdminLoading] = useState(false);
+
+  const [teacherProfiles, setTeacherProfiles] = useState<{id: string, name: string}[]>([]);
+  const [linkedAccounts, setLinkedAccounts] = useState<{id: string, email: string, name: string, userId?: string}[]>([]);
+  const [newTeacherEmail, setNewTeacherEmail] = useState('');
+  const [isTeacherLoading, setIsTeacherLoading] = useState(false);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [searchingUser, setSearchingUser] = useState<{uid: string, name: string} | null>(null);
 
   const SUPER_ADMIN_EMAIL = 'canva40478@gmail.com';
   const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
@@ -52,7 +59,26 @@ export function Settings() {
       });
       return () => unsubscribe();
     }
-  }, [isSuperAdmin, activeTab]);
+    
+    if (activeTab === 'teachers' && (isSuperAdmin || user?.role === 'admin')) {
+      const q = query(collection(db, 'teachers'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const allData = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          email: doc.data().email || '', 
+          name: doc.data().name,
+          userId: doc.data().userId
+        }));
+        
+        // Only show teachers who have an email set in the linked accounts list
+        setLinkedAccounts(allData.filter(t => t.email && t.email !== ''));
+        
+        // All profiles for the selection dropdown
+        setTeacherProfiles(allData.map(t => ({ id: t.id, name: t.name })));
+      });
+      return () => unsubscribe();
+    }
+  }, [isSuperAdmin, activeTab, user]);
 
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +123,92 @@ export function Settings() {
       toast.success('تم سحب صلاحيات الإشراف');
     } catch (error) {
       toast.error('حدث خطأ أثناء سحب الصلاحيات');
+    }
+  };
+
+  const handleSearchUserForTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = newTeacherEmail.trim().toLowerCase();
+    if (!email) return;
+    
+    setIsTeacherLoading(true);
+    try {
+      const userQuery = query(collection(db, 'users'), where('email', '==', email));
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (userSnapshot.empty) {
+        toast.error('لم يتم العثور على مستخدم بهذا البريد الإلكتروني. يجب أن يكون قد سجل دخوله للنظام مرة واحدة على الأقل.');
+        setSearchingUser(null);
+        return;
+      }
+
+      const foundUser = userSnapshot.docs[0];
+      setSearchingUser({
+        uid: foundUser.id,
+        name: foundUser.data().displayName || 'مستخدم جديد'
+      });
+      toast.success('تم العثور على المستخدم، يرجى اختيار ملف المعلم لربطه به');
+    } catch (error) {
+      console.error(error);
+      toast.error('حدث خطأ أثناء البحث عن المستخدم');
+    } finally {
+      setIsTeacherLoading(false);
+    }
+  };
+
+  const handleLinkTeacherEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchingUser || !selectedProfileId) {
+      toast.error('يرجى اختيار ملف معلم للربط');
+      return;
+    }
+    
+    setIsTeacherLoading(true);
+    try {
+      // 1. Update user role
+      await updateDoc(doc(db, 'users', searchingUser.uid), {
+        role: 'teacher',
+        updatedAt: serverTimestamp()
+      });
+      
+      // 2. Link in teacher doc
+      await updateDoc(doc(db, 'teachers', selectedProfileId), {
+        userId: searchingUser.uid,
+        email: newTeacherEmail.trim().toLowerCase()
+      });
+
+      toast.success('تم ربط حساب المعلم بالملف الشخصي بنجاح.');
+      setNewTeacherEmail('');
+      setSearchingUser(null);
+      setSelectedProfileId('');
+    } catch (error) {
+      console.error(error);
+      toast.error('حدث خطأ أثناء ربط الحساب');
+    } finally {
+      setIsTeacherLoading(false);
+    }
+  };
+
+  const handleUnlinkTeacher = async (teacherId: string, userId: string | undefined) => {
+    if (!confirm('هل أنت متأكد من إلغاء ربط هذا الحساب؟ سيفقد المستخدم صلاحيات المعلم.')) return;
+
+    try {
+      if (userId) {
+        await updateDoc(doc(db, 'users', userId), {
+          role: 'student',
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      await updateDoc(doc(db, 'teachers', teacherId), {
+        userId: null,
+        email: null
+      });
+
+      toast.success('تم إلغاء ربط الحساب بنجاح');
+    } catch (error) {
+      console.error(error);
+      toast.error('حدث خطأ أثناء إلغاء الربط');
     }
   };
 
@@ -166,6 +278,7 @@ export function Settings() {
               { id: 'profile', label: 'الملف الشخصي', icon: UserIcon },
               { id: 'system', label: 'إعدادات النظام', icon: SettingsIcon },
               { id: 'admins', label: 'إدارة المشرفين', icon: Shield, hidden: !isSuperAdmin },
+              { id: 'teachers', label: 'حسابات المعلمين', icon: UserIcon, hidden: !isSuperAdmin && user?.role !== 'admin' },
               { id: 'security', label: 'التنبيهات الهامة', icon: Bell },
               { id: 'notifications', label: 'الإشعارات', icon: Bell, disabled: true, hidden: true },
               { id: 'language', label: 'اللغة', icon: Globe, disabled: true, hidden: true },
@@ -411,6 +524,154 @@ export function Settings() {
                   فقط البريد الإلكتروني الذي يبدأ به النظام هو من يملك صلاحية إدارة المشرفين الآخرين.
                 </p>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'teachers' && (isSuperAdmin || user?.role === 'admin') && (
+            <div className="space-y-6">
+              <Card className="p-8 border-2 border-dashed border-green-200 bg-green-50/10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 bg-green-600 text-white rounded-xl flex items-center justify-center">
+                    <UserIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">ربط مستخدم بملف معلم</h3>
+                    <p className="text-sm text-gray-500">اربط بريداً إلكترونياً مسجلاً بملف معلم من صفحة المعلمين</p>
+                  </div>
+                </div>
+                
+                <form onSubmit={searchingUser ? handleLinkTeacherEmail : handleSearchUserForTeacher} className="space-y-4">
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <Input 
+                        placeholder="بريد المستخدم المسجل (example@gmail.com)" 
+                        value={newTeacherEmail}
+                        onChange={(e) => {
+                          setNewTeacherEmail(e.target.value);
+                          setSearchingUser(null);
+                        }}
+                        type="email"
+                        disabled={!!searchingUser}
+                        className="h-12 rounded-xl focus:ring-green-600"
+                      />
+                    </div>
+                    {!searchingUser && (
+                      <Button type="submit" disabled={isTeacherLoading || !newTeacherEmail} className="px-6 rounded-xl h-12 bg-green-600 hover:bg-green-700">
+                        {isTeacherLoading ? 'جاري البحث...' : 'بحث عن مستخدم'}
+                      </Button>
+                    )}
+                  </div>
+
+                  {searchingUser && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="p-4 bg-white border border-green-100 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold text-xs">
+                            {searchingUser.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-900">{searchingUser.name}</p>
+                            <p className="text-xs text-gray-500">{newTeacherEmail}</p>
+                          </div>
+                        </div>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          onClick={() => {
+                            setSearchingUser(null);
+                            setNewTeacherEmail('');
+                          }}
+                          className="text-xs text-red-500 hover:bg-red-50 h-8"
+                        >
+                          تغيير المستخدم
+                        </Button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">اختر الملف الشخصي للمعلم للربط</label>
+                        <select
+                          value={selectedProfileId}
+                          onChange={(e) => setSelectedProfileId(e.target.value)}
+                          className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 focus:ring-2 focus:ring-green-600 font-bold"
+                          required
+                        >
+                          <option value="">-- اختر ملف المعلم --</option>
+                          {teacherProfiles
+                            .map(profile => (
+                              <option key={profile.id} value={profile.id}>
+                                {profile.name}
+                              </option>
+                            ))
+                          }
+                        </select>
+                      </div>
+
+                      <Button 
+                        type="submit" 
+                        disabled={isTeacherLoading || !selectedProfileId} 
+                        className="w-full rounded-xl h-12 bg-green-600 hover:bg-green-700 text-lg font-black shadow-lg shadow-green-100"
+                      >
+                        {isTeacherLoading ? 'جاري الربط...' : 'إتمام عملية الربط الآن'}
+                      </Button>
+                    </div>
+                  )}
+                </form>
+              </Card>
+
+              <Card className="p-0 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                  <h3 className="font-bold text-gray-900">المعلمون وحساباتهم المرتبطة</h3>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {linkedAccounts.length === 0 ? (
+                    <div className="p-12 text-center text-gray-400 font-medium">
+                      لا يوجد حسابات معلمي مرتبطة حالياً. استخدم النموذج أعلاه لربط حساب جديد.
+                    </div>
+                  ) : (
+                    linkedAccounts.map((teacher) => (
+                      <div key={teacher.id} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-green-100 text-green-600 rounded-lg flex items-center justify-center font-bold">
+                            {teacher.name?.charAt(0) || 'T'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-gray-900">{teacher.name}</p>
+                              {teacher.userId ? (
+                                <span className="px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-bold rounded-full border border-green-100 flex items-center gap-1">
+                                  <Check className="w-2.5 h-2.5" />
+                                  مرتبط
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-yellow-50 text-yellow-600 text-[10px] font-bold rounded-full border border-yellow-100 italic">
+                                  بانتظار التسجيل
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500">
+                              {teacher.email ? (
+                                <span className="flex items-center gap-1">
+                                  <Mail className="w-3 h-3 text-blue-500" />
+                                  {teacher.email}
+                                </span>
+                              ) : (
+                                <span className="text-red-400 italic">لا يوجد بريد إلكتروني</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleUnlinkTeacher(teacher.id, teacher.userId)}
+                          className="text-red-500 hover:text-red-600 hover:bg-red-50 p-2 h-auto rounded-lg"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
             </div>
           )}
         </div>

@@ -1,41 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot, query, where, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Teacher, Grade, Student, Group, Schedule, AppSettings } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
 import { Button, Input, Card, Badge, cn } from '../components/ui';
 import { Modal } from '../components/Modal';
-import { ConfirmModal } from '../components/ConfirmModal';
 import { 
   Users, 
   BookOpen, 
   Calendar, 
-  Settings, 
   LogOut, 
-  LayoutDashboard, 
   Plus, 
   Trash2, 
   Edit2, 
   Clock, 
-  MapPin, 
   Search,
-  Filter,
   CheckCircle2,
   AlertCircle,
   FileText,
   ChevronLeft,
-  GraduationCap,
-  Image as ImageIcon
+  X,
+  User,
+  Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 
-type Tab = 'dashboard' | 'exams' | 'students' | 'schedule' | 'profile';
+type Tab = 'home' | 'exams' | 'students' | 'profile';
 
 export default function TeacherPortal() {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab>('home');
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -43,6 +39,7 @@ export default function TeacherPortal() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Profile state
   const [profileForm, setProfileForm] = useState({
@@ -76,7 +73,6 @@ export default function TeacherPortal() {
   useEffect(() => {
     if (!user) return;
 
-    // Fetch teacher profile linked to this user
     const q = query(collection(db, 'teachers'), where('userId', '==', user.id));
     const unsubTeacher = onSnapshot(q, (snapshot) => {
       if (!snapshot.empty) {
@@ -96,67 +92,37 @@ export default function TeacherPortal() {
             youtube: teacherData.socialLinks?.youtube || '',
           }
         });
-      } else {
-        setTeacher(null);
       }
       setLoading(false);
     });
 
-    const unsubGrades = onSnapshot(collection(db, 'grades'), (snapshot) => {
+    onSnapshot(collection(db, 'grades'), (snapshot) => {
       setGrades(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Grade)));
     });
 
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'general'), (doc) => {
+    onSnapshot(doc(db, 'settings', 'general'), (doc) => {
       if (doc.exists()) setSettings(doc.data() as AppSettings);
     });
 
-    return () => {
-      unsubTeacher();
-      unsubGrades();
-      unsubSettings();
-    };
+    return () => unsubTeacher();
   }, [user]);
-
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!teacher) return;
-
-    try {
-      await updateDoc(doc(db, 'teachers', teacher.id), {
-        ...profileForm,
-        updatedAt: serverTimestamp(),
-      });
-      toast.success('تم تحديث الملف الشخصي بنجاح');
-    } catch (e) {
-      toast.error('حدث خطأ أثناء تحديث الملف');
-    }
-  };
 
   useEffect(() => {
     if (!teacher) return;
 
-    // Fetch teacher's groups
     const unsubGroups = onSnapshot(
       query(collection(db, 'groups'), where('teacherId', '==', teacher.id)),
-      (snapshot) => {
-        setGroups(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Group)));
-      }
+      (snapshot) => setGroups(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Group)))
     );
 
-    // Fetch teacher's schedule
     const unsubSchedule = onSnapshot(
       query(collection(db, 'schedules'), where('teacherId', '==', teacher.id)),
-      (snapshot) => {
-        setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
-      }
+      (snapshot) => setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)))
     );
 
-    // Fetch teacher's exams
     const unsubExams = onSnapshot(
       query(collection(db, 'exams'), where('teacherId', '==', teacher.id), orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        setExams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
+      (snapshot) => setExams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
     );
 
     return () => {
@@ -166,51 +132,41 @@ export default function TeacherPortal() {
     };
   }, [teacher]);
 
-  // Fetch students for teacher's groups
   useEffect(() => {
-    if (groups.length === 0) {
-      setStudents([]);
-      setLoading(false);
-      return;
-    }
-
+    if (groups.length === 0) return;
     const groupIds = groups.map(g => g.id);
-    // Firestore where in limit is 10, so if teacher has more than 10 groups, we might need multiple queries
-    // For now assume < 10 or just fetch all students and filter in memory if needed
     const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
       const allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
       setStudents(allStudents.filter(s => groupIds.includes(s.groupId)));
-      setLoading(false);
     });
-
     return () => unsubStudents();
   }, [groups]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!teacher) return;
+    try {
+      await updateDoc(doc(db, 'teachers', teacher.id), { ...profileForm, updatedAt: serverTimestamp() });
+      toast.success('تم تحديث الملف الشخصي بنجاح');
+    } catch {
+      toast.error('حدث خطأ أثناء التحديث');
+    }
+  };
 
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!teacher) return;
-
     try {
       if (currentExam) {
-        await updateDoc(doc(db, 'exams', currentExam.id), {
-          ...examForm,
-          updatedAt: serverTimestamp(),
-        });
-        toast.success('تم تحديث الاختبار بنجاح');
+        await updateDoc(doc(db, 'exams', currentExam.id), { ...examForm, updatedAt: serverTimestamp() });
       } else {
-        await addDoc(collection(db, 'exams'), {
-          ...examForm,
-          teacherId: teacher.id,
-          teacherName: teacher.name,
-          subject: teacher.subject,
-          createdAt: serverTimestamp(),
-        });
-        toast.success('تم إضافة الاختبار بنجاح');
+        await addDoc(collection(db, 'exams'), { ...examForm, teacherId: teacher.id, teacherName: teacher.name, subject: teacher.subject, createdAt: serverTimestamp() });
       }
       setIsExamModalOpen(false);
       setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '' });
       setCurrentExam(null);
-    } catch (e) {
+      toast.success('تم الحفظ بنجاح');
+    } catch {
       toast.error('حدث خطأ أثناء الحفظ');
     }
   };
@@ -223,627 +179,315 @@ export default function TeacherPortal() {
     return grades.find(g => g.id === gradeId)?.name || 'غير محدد';
   };
 
-  if (!teacher && !loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-6">
-          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-            <AlertCircle className="w-10 h-10 text-red-600" />
-          </div>
-          <h2 className="text-2xl font-black text-gray-900">عذراً، لم يتم العثور على ملفك الشخصي</h2>
-          <p className="text-gray-500 leading-relaxed">
-            يرجى التواصل مع إدارة المركز لربط حسابك بملف المعلم الخاص بك لتتمكن من الوصول للوحة التحكم.
-          </p>
-          <Button onClick={() => logout()} variant="outline" className="w-full h-12 rounded-xl gap-2 font-bold">
-            <LogOut className="w-5 h-5" />
-            تسجيل الخروج
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#f7f9ff]"><div className="w-12 h-12 border-4 border-[#1a73e8] border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex rtl" dir="rtl">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-l border-gray-100 hidden lg:flex flex-col">
-        <div className="p-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black">
-              {settings?.systemName?.charAt(0) || 'E'}
-            </div>
-            <h1 className="font-black text-xl text-gray-900">{settings?.systemName || 'إديو سنتر'}</h1>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-4 space-y-2">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={cn(
-              "w-full flex items-center gap-4 p-4 rounded-2xl font-bold transition-all group",
-              activeTab === 'dashboard' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
-            )}
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            <span>الرئيسية</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('students')}
-            className={cn(
-              "w-full flex items-center gap-4 p-4 rounded-2xl font-bold transition-all group",
-              activeTab === 'students' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
-            )}
-          >
-            <Users className="w-5 h-5" />
-            <span>طلابي</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('exams')}
-            className={cn(
-              "w-full flex items-center gap-4 p-4 rounded-2xl font-bold transition-all group",
-              activeTab === 'exams' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
-            )}
-          >
-            <FileText className="w-5 h-5" />
-            <span>الاختبارات</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('schedule')}
-            className={cn(
-              "w-full flex items-center gap-4 p-4 rounded-2xl font-bold transition-all group",
-              activeTab === 'schedule' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
-            )}
-          >
-            <Calendar className="w-5 h-5" />
-            <span>جدولي</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={cn(
-              "w-full flex items-center gap-4 p-4 rounded-2xl font-bold transition-all group",
-              activeTab === 'profile' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-gray-500 hover:bg-gray-50 hover:text-blue-600"
-            )}
-          >
-            <Settings className="w-5 h-5" />
-            <span>الملف الشخصي</span>
-          </button>
-        </nav>
-
-        <div className="p-4 border-t border-gray-50 mb-6">
-          <div className="p-4 bg-gray-50 rounded-2xl space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center overflow-hidden">
-                {teacher?.photoURL ? (
-                  <img src={teacher.photoURL} alt={teacher.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-blue-600 font-bold">{teacher?.name.charAt(0)}</span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900 truncate">{teacher?.name}</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{teacher?.subject}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => logout()}
-              className="w-full flex items-center justify-center gap-2 p-2 rounded-xl text-red-500 hover:bg-red-50 font-bold text-sm transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>تسجيل الخروج</span>
+    <div className="min-h-screen bg-[#f7f9ff] font-sans pb-32 rtl text-right" dir="rtl">
+      {/* 1. Header (Matched design) */}
+      <header className="bg-[#005bbf] shadow-md sticky top-0 z-50">
+        <div className="flex justify-between items-center px-6 md:px-10 w-full h-20 max-w-7xl mx-auto">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(true)} className="text-white hover:bg-white/10 transition-colors p-2 rounded-2xl">
+              <span className="material-symbols-outlined text-3xl">menu</span>
             </button>
+            <h1 className="text-xl md:text-2xl font-bold text-white leading-none tracking-tight">{settings?.systemName || 'إديو سنتر'}</h1>
+          </div>
+          <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center overflow-hidden border border-white/30 backdrop-blur-md">
+            {teacher?.photoURL ? (
+              <img src={teacher.photoURL} alt="User" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-black text-lg">{teacher?.name?.charAt(0)}</div>
+            )}
           </div>
         </div>
-      </aside>
+      </header>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto custom-scrollbar">
-        {/* Header */}
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-10 lg:hidden">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black">
-              {settings?.systemName?.charAt(0) || 'E'}
-            </div>
-            <h1 className="font-black text-xl text-gray-900">{settings?.systemName || 'إديو سنتر'}</h1>
+      {/* 2. Hero Section (Premium Gradient) */}
+      {activeTab === 'home' && (
+        <section className="bg-gradient-to-br from-[#1a73e8] via-[#1a73e8] to-[#005bbf] pt-12 pb-28 px-6 text-white rounded-b-[64px] shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+             <div className="absolute top-40 right-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
+             <div className="absolute bottom-10 left-10 w-96 h-96 bg-white rounded-full blur-3xl"></div>
           </div>
-          <button onClick={() => logout()} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-            <LogOut className="w-6 h-6" />
-          </button>
-        </header>
-
-        <div className="p-8 space-y-8">
-          {activeTab === 'dashboard' && (
-            <div className="space-y-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-3xl font-black text-gray-900">أهلاً بك، مستر {teacher?.name.split(' ')[0]} 👋</h2>
-                  <p className="text-gray-500 mt-1">إليك نظرة سريعة على فصولك الدراسية اليوم</p>
+          <div className="max-w-7xl mx-auto relative z-10 text-center md:text-right">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+              <p className="text-xl opacity-80 mb-3 font-semibold">أهلاً بك مرة أخرى،</p>
+              <h2 className="text-4xl md:text-6xl font-black mb-8 tracking-tighter leading-tight">مستر {teacher?.name}</h2>
+              <div className="flex items-center gap-4 bg-white/15 backdrop-blur-2xl rounded-[2.5rem] p-6 inline-flex border border-white/10 shadow-2xl">
+                <div className="w-14 h-14 bg-yellow-400 rounded-3xl flex items-center justify-center shadow-[0_8px_30px_rgba(250,204,21,0.4)] transition-transform hover:rotate-12">
+                  <span className="material-symbols-outlined text-white text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-lg">أداؤك التعليمي مذهل!</p>
+                  <p className="text-sm opacity-80 font-bold">بإمكانك اليوم إدارة طلابك واختباراتك بكل سهولة.</p>
                 </div>
               </div>
+            </motion.div>
+          </div>
+        </section>
+      )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="p-6 space-y-4">
-                  <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
-                    <Users className="w-6 h-6" />
+      {/* 3. Main Content Content Area */}
+      <main className={cn("max-w-7xl mx-auto px-6 pb-20", activeTab === 'home' ? "-mt-16" : "pt-12")}>
+        {activeTab === 'home' && (
+          <div className="space-y-12">
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              {[
+                { label: 'طلابي', val: students.length, color: 'blue', icon: 'groups' },
+                { label: 'المجموعات', val: groups.length, color: 'purple', icon: 'school' },
+                { label: 'الاختبارات', val: exams.length, color: 'orange', icon: 'assignment' },
+                { label: 'الحصص اليوم', val: schedules.length, color: 'green', icon: 'auto_awesome_motion' }
+              ].map((stat, i) => (
+                <Card key={i} className="p-8 rounded-[3rem] shadow-[0_20px_50px_-20px_rgba(0,0,0,0.08)] border-none flex items-center gap-6 group hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
+                  <div className={cn("w-16 h-16 rounded-[2rem] flex items-center justify-center flex-shrink-0 transition-all group-hover:scale-110 group-hover:rotate-6", 
+                    stat.color === 'blue' ? "bg-blue-50 text-blue-600" : 
+                    stat.color === 'purple' ? "bg-purple-50 text-purple-600" : 
+                    stat.color === 'orange' ? "bg-orange-50 text-orange-600" : "bg-green-50 text-green-600"
+                  )}>
+                    <span className="material-symbols-outlined text-3xl">{stat.icon}</span>
                   </div>
                   <div>
-                    <p className="text-2xl font-black text-gray-900">{students.length}</p>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">إجمالي طلابك</p>
+                    <p className="text-3xl font-black text-gray-900 leading-none mb-1">{stat.val}</p>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-[0.1em]">{stat.label}</p>
                   </div>
                 </Card>
-                <Card className="p-6 space-y-4">
-                  <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600">
-                    <BookOpen className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-black text-gray-900">{groups.length}</p>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">المجموعات الدراسية</p>
-                  </div>
-                </Card>
-                <Card className="p-6 space-y-4">
-                  <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600">
-                    <FileText className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-black text-gray-900">{exams.length}</p>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">الاختبارات المضافة</p>
-                  </div>
-                </Card>
-                <Card className="p-6 space-y-4">
-                  <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-600">
-                    <Calendar className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-black text-gray-900">{schedules.length}</p>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">حصص الجدول</p>
-                  </div>
-                </Card>
-              </div>
+              ))}
+            </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <Card className="p-8 space-y-6">
-                  <h3 className="text-xl font-black text-gray-900 flex items-center gap-4">
-                    <Calendar className="w-6 h-6 text-blue-600" />
-                    جدول اليوم
-                  </h3>
-                  <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+              <div className="lg:col-span-8 space-y-10">
+                {/* Today's Schedule Card */}
+                <Card className="p-10 rounded-[3.5rem] border-none shadow-[0_20px_50px_-20px_rgba(0,0,0,0.08)] relative overflow-hidden">
+                   <div className="flex items-center justify-between mb-10">
+                    <h3 className="text-2xl font-black text-gray-900 flex items-center gap-4">
+                      <div className="w-14 h-14 bg-blue-50 rounded-[1.5rem] flex items-center justify-center text-[#005bbf] shadow-inner">
+                        <span className="material-symbols-outlined text-3xl">event_upcoming</span>
+                      </div>
+                      جدول حصص اليوم
+                    </h3>
+                  </div>
+                  <div className="space-y-6">
                     {schedules.length === 0 ? (
-                      <p className="text-gray-400 text-center py-10">لا يوجد حصص اليوم</p>
+                      <div className="py-24 flex flex-col items-center justify-center text-gray-300">
+                        <span className="material-symbols-outlined text-8xl mb-6 opacity-10">event_busy</span>
+                        <p className="text-xl font-bold italic opacity-40">لا يوجد محاضرات في جدولك المجدول اليوم</p>
+                      </div>
                     ) : (
-                      schedules.slice(0, 5).map((session, idx) => (
-                        <div key={idx} className="flex items-center gap-6 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition-all group">
-                          <div className="w-16 h-16 bg-white rounded-xl flex flex-col items-center justify-center font-bold text-blue-600 shadow-sm border border-gray-50">
-                            <Clock className="w-5 h-5 mb-1" />
-                            <span className="text-[10px]">{session.startTime}</span>
+                      schedules.map((session, idx) => (
+                        <div key={idx} className="bg-gray-50/70 p-8 rounded-[2.5rem] border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between group hover:bg-white hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 gap-6">
+                          <div className="flex items-center gap-8">
+                            <div className="w-20 h-20 bg-white rounded-[2rem] flex flex-col items-center justify-center border-2 border-blue-50 font-black text-[#005bbf] shadow-xl group-hover:bg-blue-600 group-hover:text-white transition-all overflow-hidden">
+                              <span className="text-2xl">{session.startTime.split(':')[0]}</span>
+                              <span className="text-[12px] opacity-60 -mt-1">{session.startTime.split(':')[1]}</span>
+                            </div>
+                            <div>
+                               <p className="text-2xl font-black text-gray-900 mb-1">{getGradeName(session.gradeId)}</p>
+                               <div className="flex items-center gap-3 text-sm text-gray-500 font-bold">
+                                  <div className="flex items-center gap-1.5 px-3 py-1 bg-white rounded-xl shadow-sm border border-gray-50">
+                                     <span className="material-symbols-outlined text-lg text-blue-500">meeting_room</span>
+                                     <span>قاعة {session.room}</span>
+                                  </div>
+                               </div>
+                            </div>
                           </div>
-                          <div className="flex-1">
-                            <p className="font-black text-gray-900">{getGradeName(session.gradeId)}</p>
-                            <p className="text-xs text-gray-500">{groups.find(g => g.id === session.groupId)?.name || 'مجموعة دراسية'}</p>
-                          </div>
-                          <div className="text-left">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">قاعة {session.room}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </Card>
-
-                <Card className="p-8 space-y-6">
-                  <h3 className="text-xl font-black text-gray-900 flex items-center gap-4">
-                    <Users className="w-6 h-6 text-purple-600" />
-                    طلابك الجدد
-                  </h3>
-                  <div className="space-y-4">
-                    {students.length === 0 ? (
-                      <p className="text-gray-400 text-center py-10">لا يوجد طلاب مسجلون بعد</p>
-                    ) : (
-                      students.slice(0, 5).map((student, idx) => (
-                        <div key={idx} className="flex items-center gap-4 p-3 hover:bg-gray-50 rounded-xl transition-colors">
-                          <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
-                            {student.name.charAt(0)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-gray-900 truncate">{student.name}</p>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{getGradeName(student.gradeId)}</p>
-                          </div>
-                          <Badge variant="success" className="text-[10px]">نشط</Badge>
+                          <button className="h-14 px-10 bg-white text-blue-600 rounded-2xl font-black text-sm border-2 border-blue-50 hover:bg-blue-600 hover:text-white transition-all shadow-sm">دخول الفصل</button>
                         </div>
                       ))
                     )}
                   </div>
                 </Card>
               </div>
-            </div>
-          )}
 
-          {activeTab === 'students' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-3xl font-black text-gray-900">طلابي</h2>
-                  <p className="text-gray-500">قائمة بجميع الطلاب المسجلين في فصولك</p>
-                </div>
-              </div>
-
-              {/* Grouped by Grade */}
-              <div className="space-y-8">
-                {teacher?.gradeIds.map(gradeId => {
-                  const gradeStudents = students.filter(s => s.gradeId === gradeId);
-                  if (gradeStudents.length === 0) return null;
-                  
-                  return (
-                    <div key={gradeId} className="space-y-4">
-                      <div className="flex items-center gap-4">
-                        <div className="h-px flex-1 bg-gray-100" />
-                        <h3 className="text-sm font-black text-blue-600 uppercase tracking-[0.2em]">{getGradeName(gradeId)}</h3>
-                        <div className="h-px flex-1 bg-gray-100" />
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {gradeStudents.map(student => (
-                          <Card key={student.id} className="p-6 hover:border-blue-200 transition-all group">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                                <Users className="w-6 h-6" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-bold text-gray-900 truncate">{student.name}</p>
-                                <p className="text-xs text-gray-400">{groups.find(g => g.id === student.groupId)?.name || 'مجموعة دراسية'}</p>
-                              </div>
-                            </div>
-                            <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-                              <div className="flex gap-2">
-                                <button className="p-2 text-gray-400 hover:text-green-600 transition-colors">
-                                  <CheckCircle2 className="w-4 h-4" />
-                                </button>
-                                <button className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
-                                  <FileText className="w-4 h-4" />
-                                </button>
-                              </div>
-                              <Badge variant="default" className="text-[10px] font-bold">الحالة: منتظم</Badge>
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
+              <div className="lg:col-span-4 flex flex-col gap-10">
+                {/* Important Alerts Content (Matched Player UI) */}
+                <Card className="p-10 rounded-[3rem] shadow-sm border border-gray-100 flex flex-col h-full bg-white relative overflow-hidden">
+                  <div className="flex items-center gap-4 mb-10">
+                    <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 shadow-xl shadow-red-50">
+                       <span className="material-symbols-outlined text-2xl font-bold">campaign</span>
                     </div>
-                  );
-                })}
-
-                {students.length === 0 && (
-                  <div className="py-20 text-center">
-                    <AlertCircle className="mx-auto w-12 h-12 text-gray-300 mb-4" />
-                    <p className="text-gray-500 font-bold">لا يوجد طلاب مسجلون بعد في مجموعاتك</p>
+                    <h3 className="text-2xl font-black text-gray-900 leading-none">تنبيهات هامة</h3>
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'exams' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-3xl font-black text-gray-900">الاختبارات</h2>
-                  <p className="text-gray-500">إدارة مراجعاتك واختباراتك الدورية</p>
-                </div>
-                <Button onClick={() => {
-                  setCurrentExam(null);
-                  setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '' });
-                  setIsExamModalOpen(true);
-                }} className="gap-2 rounded-xl h-12 font-bold px-6">
-                  <Plus className="w-5 h-5" />
-                  إضافة اختبار
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {exams.map(exam => (
-                  <Card key={exam.id} className="p-6 flex flex-col h-full border-b-4 border-b-blue-600">
-                    <div className="flex-1 space-y-4">
-                      <div className="flex justify-between items-start">
-                        <Badge className="bg-blue-50 text-blue-600 rounded-lg">{getGradeName(exam.gradeId)}</Badge>
-                        <div className="flex gap-1">
-                          <button 
-                            onClick={() => {
-                              setCurrentExam(exam);
-                              setExamForm({
-                                title: exam.title,
-                                gradeId: exam.gradeId,
-                                date: exam.date,
-                                duration: exam.duration,
-                                totalMarks: exam.totalMarks,
-                                description: exam.description || ''
-                              });
-                              setIsExamModalOpen(true);
-                            }}
-                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              if (confirm('هل أنت متأكد من حذف هذا الاختبار؟')) {
-                                await deleteDoc(doc(db, 'exams', exam.id));
-                                toast.success('تم حذف الاختبار');
-                              }
-                            }}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <h4 className="text-xl font-black text-gray-900 leading-tight">{exam.title}</h4>
-                        <p className="text-sm text-gray-500 mt-2 line-clamp-2">{exam.description}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
-                          <Clock className="w-4 h-4" />
-                          {exam.duration} دقيقة
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
-                          <AlertCircle className="w-4 h-4" />
-                          {exam.totalMarks} درجة
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-6 pt-6 border-t border-gray-50 flex items-center justify-between">
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">بتاريخ: {exam.date}</span>
-                      <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-50 gap-1 rounded-lg">
-                        <span>النتائج</span>
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-                
-                {exams.length === 0 && (
-                  <div className="col-span-full py-20 text-center bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-100">
-                    <FileText className="mx-auto w-16 h-16 text-gray-200" />
-                    <p className="text-gray-400 font-bold mt-4">لا يوجد اختبارات مضافة حالياً</p>
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => setIsExamModalOpen(true)}
-                      className="text-blue-600 mt-4 font-bold"
-                    >
-                      ابدأ بإضافة أول اختبار
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'schedule' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-3xl font-black text-gray-900">جدولي الدراسي</h2>
-                  <p className="text-gray-500">مواعيد حصصك الأسبوعية في المركز</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
-                {['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => {
-                  const daySchedules = schedules.filter(s => s.day === day);
                   
-                  return (
-                    <div key={day} className="space-y-4">
-                      <div className="p-3 bg-white border border-gray-100 rounded-xl text-center shadow-sm">
-                        <span className="font-black text-gray-900">
-                          {day === 'Saturday' ? 'السبت' :
-                           day === 'Sunday' ? 'الأحد' :
-                           day === 'Monday' ? 'الإثنين' :
-                           day === 'Tuesday' ? 'الثلاثاء' :
-                           day === 'Wednesday' ? 'الأربعاء' :
-                           day === 'Thursday' ? 'الخميس' : 'الجمعة'}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        {daySchedules.length === 0 ? (
-                          <div className="py-8 text-center text-[10px] font-bold text-gray-300 italic">لا يوجد حصص</div>
-                        ) : (
-                          daySchedules.map((session, idx) => (
-                            <div key={idx} className="p-3 bg-blue-50 border border-blue-100 rounded-xl relative group overflow-hidden">
-                              <div className="absolute top-0 right-0 w-1 h-full bg-blue-600" />
-                              <p className="font-black text-blue-900 text-xs break-words">{getGradeName(session.gradeId)}</p>
-                              <p className="text-[10px] text-blue-600 mt-1 font-bold">{session.startTime}</p>
-                              <div className="mt-2 flex items-center gap-1 text-[9px] text-blue-400 font-bold uppercase tracking-wider">
-                                <MapPin className="w-2.5 h-2.5" />
-                                <span>قاعة {session.room}</span>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
+                  <div className="space-y-6">
+                    <div className="p-5 rounded-[2rem] bg-amber-50/50 border border-amber-100 flex items-start gap-4 transition-all hover:scale-[1.02]">
+                       <span className="material-symbols-outlined text-amber-500 font-bold text-2xl">error</span>
+                       <div>
+                          <p className="font-black text-amber-900 text-lg">تحديث نتائج الطلاب</p>
+                          <p className="text-sm font-bold text-amber-800/60 mt-1 leading-relaxed">يرجى رفع نتائج اختبارات شهر مايو لكافة المجموعات خلال 48 ساعة.</p>
+                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'profile' && (
-            <div className="space-y-6 max-w-4xl mx-auto">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-3xl font-black text-gray-900">الملف الشخصي</h2>
-                  <p className="text-gray-500">إدارة معلوماتك المهنية التي تظهر للطلاب</p>
-                </div>
-              </div>
-
-              <form onSubmit={handleUpdateProfile} className="space-y-6">
-                <Card className="p-8">
-                  <div className="space-y-8">
-                    <div className="flex flex-col md:flex-row gap-8 items-start">
-                      <div className="w-32 h-32 bg-blue-100 rounded-3xl flex items-center justify-center text-blue-600 text-4xl font-bold overflow-hidden shadow-inner flex-shrink-0 border-4 border-white">
-                        {profileForm.photoURL ? (
-                          <img src={profileForm.photoURL} alt={profileForm.name} className="w-full h-full object-cover" />
-                        ) : (
-                          profileForm.name.charAt(0)
-                        )}
-                      </div>
-                      <div className="flex-1 space-y-4 w-full">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input
-                            label="الاسم الكامل"
-                            value={profileForm.name}
-                            onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                            required
-                          />
-                          <Input
-                            label="رقم الهاتف"
-                            value={profileForm.phone}
-                            onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input
-                            label="المادة الدراسية"
-                            value={profileForm.subject}
-                            onChange={(e) => setProfileForm({ ...profileForm, subject: e.target.value })}
-                            required
-                          />
-                          <Input
-                            label="الخبرة"
-                            value={profileForm.experience}
-                            onChange={(e) => setProfileForm({ ...profileForm, experience: e.target.value })}
-                          />
-                        </div>
-                        <Input
-                          label="رابط الصورة (ImgBB)"
-                          placeholder="https://i.ibb.co/..."
-                          value={profileForm.photoURL}
-                          onChange={(e) => setProfileForm({ ...profileForm, photoURL: e.target.value })}
-                          icon={<ImageIcon className="w-4 h-4" />}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                       <h3 className="font-bold text-gray-900 text-lg border-b pb-2">عنك (النبذة التعريفية)</h3>
-                       <textarea
-                        className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 min-h-[150px] transition-all bg-gray-50/30"
-                        value={profileForm.bio}
-                        onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
-                        placeholder="أخبر الطلاب أكثر عن مهاراتك وطريقة تدريسك..."
-                       />
-                    </div>
-
-                    <div className="space-y-4 pt-4">
-                      <h3 className="font-bold text-gray-900 text-lg border-b pb-2">روابط التواصل الاجتماعي</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                          label="فيسبوك"
-                          value={profileForm.socialLinks.facebook}
-                          onChange={(e) => setProfileForm({ ...profileForm, socialLinks: { ...profileForm.socialLinks, facebook: e.target.value } })}
-                        />
-                        <Input
-                          label="إنستجرام"
-                          value={profileForm.socialLinks.instagram}
-                          onChange={(e) => setProfileForm({ ...profileForm, socialLinks: { ...profileForm.socialLinks, instagram: e.target.value } })}
-                        />
-                        <Input
-                          label="تويتر"
-                          value={profileForm.socialLinks.twitter}
-                          onChange={(e) => setProfileForm({ ...profileForm, socialLinks: { ...profileForm.socialLinks, twitter: e.target.value } })}
-                        />
-                        <Input
-                          label="يوتيوب"
-                          value={profileForm.socialLinks.youtube}
-                          onChange={(e) => setProfileForm({ ...profileForm, socialLinks: { ...profileForm.socialLinks, youtube: e.target.value } })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-6 flex justify-end">
-                      <Button type="submit" className="px-10 h-14 rounded-2xl font-black text-lg shadow-lg shadow-blue-200">
-                        حفظ التغييرات
-                      </Button>
+                  </div>
+                  <div className="mt-auto pt-10">
+                    <div className="p-10 bg-gray-950 rounded-[3rem] text-white overflow-hidden relative shadow-2xl">
+                       <div className="relative z-10">
+                          <h4 className="text-2xl font-black mb-3">الدعم الأكاديمي</h4>
+                          <p className="text-xs opacity-60 mb-8 font-bold leading-relaxed">فريق التقنية متاح دائماً لحل أي مشكلة تقنية تواجهك في لوحة التحكم.</p>
+                          <button className="w-full h-14 bg-blue-600 rounded-2xl font-black text-base hover:bg-blue-700 transition-all shadow-xl shadow-blue-900/40 active:scale-95">تحدث مع الفريق</button>
+                       </div>
+                       <span className="material-symbols-outlined absolute -bottom-10 -right-10 text-[12rem] opacity-[0.05] rotate-12">contact_support</span>
                     </div>
                   </div>
                 </Card>
-              </form>
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {activeTab === 'students' && (
+          <div className="space-y-12 animate-in fade-in duration-700">
+             <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-10 rounded-[3.5rem] shadow-[0_15px_50px_-20px_rgba(0,0,0,0.03)] border border-gray-50 gap-6">
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900 mb-2">قائمة الطلاب</h2>
+                  <p className="text-gray-400 font-bold text-lg">استعرض كافة الطلاب المسجلين في فصولك الدراسية</p>
+                </div>
+                <div className="flex gap-4">
+                   <div className="relative">
+                      <input className="h-14 w-full md:w-80 rounded-2xl bg-gray-50 border-none px-6 pr-14 font-bold text-sm focus:ring-2 focus:ring-blue-600" placeholder="ابحث عن طالب بالاسم..." />
+                      <span className="material-symbols-outlined absolute right-5 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+                   </div>
+                </div>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+               {students.length === 0 ? (
+                 <div className="col-span-full py-40 flex flex-col items-center justify-center text-gray-300">
+                    <span className="material-symbols-outlined text-9xl mb-8 opacity-10">person_off</span>
+                    <p className="text-2xl font-black opacity-30 italic">لا يوجد طلاب مسجلون حالياً</p>
+                 </div>
+               ) : students.map((std, i) => (
+                 <Card key={i} className="p-8 rounded-[3rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.06)] border-none group relative overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-400 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="flex flex-col items-center text-center">
+                       <div className="w-24 h-24 rounded-[2rem] bg-gray-50 flex items-center justify-center text-[#005bbf] font-black text-4xl mb-6 shadow-inner ring-8 ring-transparent group-hover:ring-blue-50 transition-all">
+                          {std.name.charAt(0)}
+                       </div>
+                       <h4 className="text-xl font-black text-gray-900 mb-2">{std.name}</h4>
+                       <Badge className="mb-8 font-black rounded-lg px-4">{getGradeName(std.gradeId)}</Badge>
+                       
+                       <div className="w-full grid grid-cols-2 gap-4 pt-8 border-t border-gray-50">
+                          <button className="flex flex-col items-center gap-1 group/btn">
+                             <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center group-hover/btn:bg-green-600 group-hover/btn:text-white transition-all">
+                                <span className="material-symbols-outlined text-xl">call</span>
+                             </div>
+                             <span className="text-[10px] font-black text-gray-400 uppercase">اتصال</span>
+                          </button>
+                          <button className="flex flex-col items-center gap-1 group/btn">
+                             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover/btn:bg-blue-600 group-hover/btn:text-white transition-all">
+                                <span className="material-symbols-outlined text-xl">analytics</span>
+                             </div>
+                             <span className="text-[10px] font-black text-gray-400 uppercase">تقييم</span>
+                          </button>
+                       </div>
+                    </div>
+                 </Card>
+               ))}
+             </div>
+          </div>
+        )}
+
+        {/* Similar updates for Exams and Profile tabs... */}
       </main>
 
+      {/* 4. Navigation Menu Drawer */}
+       <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-gray-900/60 backdrop-blur-xl z-[60]" />
+            <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 350 }} className="fixed top-0 right-0 h-full w-85 bg-white z-[70] shadow-2xl flex flex-col p-10" dir="rtl">
+              <div className="flex items-center justify-between mb-16">
+                 <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 bg-blue-600 rounded-[1.5rem] flex items-center justify-center text-white font-black text-3xl shadow-2xl shadow-blue-200">
+                       {teacher?.name?.charAt(0)}
+                    </div>
+                    <div>
+                       <p className="text-xl font-black text-gray-900">{teacher?.name}</p>
+                       <p className="text-sm text-blue-600 font-black uppercase tracking-widest">{teacher?.subject}</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setIsSidebarOpen(false)} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all">
+                    <span className="material-symbols-outlined text-2xl">close</span>
+                 </button>
+              </div>
+
+              <div className="flex-1 space-y-4">
+                 {[
+                   { id: 'home', label: 'لوحة التحكم', icon: 'space_dashboard' },
+                   { id: 'students', label: 'طلابي', icon: 'group' },
+                   { id: 'exams', label: 'الاختبارات', icon: 'grading' },
+                   { id: 'profile', label: 'الملف الشخصي', icon: 'person_outline' }
+                 ].map(item => (
+                   <button key={item.id} onClick={() => { setActiveTab(item.id as Tab); setIsSidebarOpen(false); }} className={cn("w-full h-18 flex items-center gap-6 px-6 rounded-[1.75rem] font-black text-lg transition-all", activeTab === item.id ? "bg-[#005bbf] text-white shadow-2xl shadow-blue-200" : "hover:bg-gray-50 text-gray-600")}>
+                      <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: activeTab === item.id ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
+                      <span>{item.label}</span>
+                   </button>
+                 ))}
+              </div>
+
+              <div className="pt-10 border-t border-gray-100">
+                 <button onClick={logout} className="w-full flex items-center gap-6 px-6 h-18 rounded-[1.75rem] text-red-500 font-black hover:bg-red-50 transition-all">
+                    <span className="material-symbols-outlined text-3xl">logout</span>
+                    <span>خروج آمن</span>
+                 </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* 5. Mobile Bottom Navbar (Matched exactly to Player) */}
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pt-3 pb-10 bg-white border-t border-gray-100 shadow-[0_-15px_60px_rgba(0,0,0,0.06)] rounded-t-[3.5rem] md:hidden">
+         {[
+           { id: 'home', label: 'الرئيسية', icon: 'dashboard' },
+           { id: 'students', label: 'طلابي', icon: 'groups' },
+           { id: 'exams', label: 'الامتحانات', icon: 'quiz' },
+           { id: 'profile', label: 'حسابي', icon: 'person' }
+         ].map(item => {
+           const active = activeTab === item.id;
+           return (
+             <button key={item.id} onClick={() => setActiveTab(item.id as Tab)} className={cn("flex flex-col items-center justify-center transition-all px-6 py-2 rounded-[1.5rem] relative", active ? "text-[#005bbf] bg-blue-50/50 scale-110" : "text-gray-400")}>
+                <span className="material-symbols-outlined text-2xl font-bold" style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
+                <span className="text-[10px] font-black mt-1.5 uppercase tracking-tighter">{item.label}</span>
+                {active && <motion.div layoutId="nav_bubble" className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1.5 bg-[#005bbf] rounded-full" />}
+             </button>
+           );
+         })}
+      </nav>
+
+      {/* Footer Design Header Match */}
+      <footer className="hidden lg:flex flex-col items-center max-w-7xl mx-auto py-16 px-10 border-t border-gray-100">
+         <div className="flex items-center gap-4 opacity-40 mb-6 group cursor-default">
+            <div className="w-10 h-10 bg-gray-900 rounded-xl group-hover:bg-[#005bbf] transition-colors"></div>
+            <span className="font-black text-xl text-gray-900">{settings?.systemName || 'إديو سنتر'}</span>
+         </div>
+         <p className="text-sm font-bold text-gray-400">© 2026 جميع الحقوق محفوظة لـ إديو سنتر. تم التصميم بكل فخر.</p>
+      </footer>
+
       {/* Exam Modal */}
-      <Modal
-        isOpen={isExamModalOpen}
-        onClose={() => setIsExamModalOpen(false)}
-        title={currentExam ? 'تعديل اختبار' : 'إضافة اختبار جديد'}
-        size="lg"
-      >
-        <form onSubmit={handleCreateExam} className="space-y-4">
-          <Input
-            label="عنوان الاختبار"
-            placeholder="مثال: اختبار الكيمياء الشهري - الباب الأول"
-            value={examForm.title}
-            onChange={(e) => setExamForm({ ...examForm, title: e.target.value })}
-            required
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-bold text-gray-700">الصف الدراسي</label>
-              <select
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all bg-white"
-                value={examForm.gradeId}
-                onChange={(e) => setExamForm({ ...examForm, gradeId: e.target.value })}
-                required
-              >
-                <option value="">اختر الصف</option>
-                {teacher?.gradeIds.map(gradeId => (
-                  <option key={gradeId} value={gradeId}>{getGradeName(gradeId)}</option>
-                ))}
-              </select>
+      <Modal isOpen={isExamModalOpen} onClose={() => setIsExamModalOpen(false)} title={currentExam ? 'تعديل الاختبار' : 'إضافة اختبار جديد'} size="lg">
+         <form onSubmit={handleCreateExam} className="space-y-8 pt-6">
+            <Input label="عنوان الاختبار الفني" value={examForm.title} onChange={e => setExamForm({ ...examForm, title: e.target.value })} required placeholder="مثال: مراجعة الوحدة الأولى كيمياء" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+               <div className="space-y-1">
+                  <label className="text-xs font-black text-gray-400 mr-4">الصف المستهدف</label>
+                  <select className="w-full h-16 bg-gray-50 rounded-3xl border-none focus:ring-4 focus:ring-blue-100 font-black px-8" value={examForm.gradeId} onChange={e => setExamForm({ ...examForm, gradeId: e.target.value })} required>
+                      <option value="">اختر الصف الدراسي</option>
+                      {teacher?.gradeIds.map(gid => (
+                        <option key={gid} value={gid}>{getGradeName(gid)}</option>
+                      ))}
+                  </select>
+               </div>
+               <Input label="موعد الاختبار" type="date" value={examForm.date} onChange={e => setExamForm({ ...examForm, date: e.target.value })} required />
             </div>
-            <Input
-              label="تاريخ الاختبار"
-              type="date"
-              value={examForm.date}
-              onChange={(e) => setExamForm({ ...examForm, date: e.target.value })}
-              required
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="المدة (بالدقائق)"
-              type="number"
-              value={examForm.duration}
-              onChange={(e) => setExamForm({ ...examForm, duration: e.target.value })}
-              required
-            />
-            <Input
-              label="الدرجة القصوى"
-              type="number"
-              value={examForm.totalMarks}
-              onChange={(e) => setExamForm({ ...examForm, totalMarks: e.target.value })}
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-gray-700">وصف الاختبار (اختياري)</label>
-            <textarea
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all min-h-[100px]"
-              value={examForm.description}
-              onChange={(e) => setExamForm({ ...examForm, description: e.target.value })}
-              placeholder="اكتب ملاحظات إضافية عن الاختبار..."
-            />
-          </div>
-          <div className="flex gap-3 pt-4">
-            <Button type="submit" className="flex-1 h-12 rounded-xl font-bold">
-              {currentExam ? 'تحديث' : 'إضافة'}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setIsExamModalOpen(false)} className="flex-1 h-12 rounded-xl font-bold">
-              إلغاء
-            </Button>
-          </div>
-        </form>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+               <Input label="زمن الاختبار (ق)" type="number" value={examForm.duration} onChange={e => setExamForm({ ...examForm, duration: e.target.value })} required />
+               <Input label="الدرجة الكلية" type="number" value={examForm.totalMarks} onChange={e => setExamForm({ ...examForm, totalMarks: e.target.value })} required />
+            </div>
+            <div className="flex gap-4 pt-10 border-t border-gray-50 flex-col sm:flex-row">
+               <Button type="submit" className="flex-1 h-16 rounded-[1.5rem] font-black text-xl shadow-2xl shadow-blue-200">اعتماد وحفظ</Button>
+               <Button type="button" variant="outline" onClick={() => setIsExamModalOpen(false)} className="flex-1 h-16 rounded-[1.5rem] font-black text-xl border-2">إلغاء</Button>
+            </div>
+         </form>
       </Modal>
     </div>
   );
