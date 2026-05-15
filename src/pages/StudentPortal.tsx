@@ -487,32 +487,92 @@ export function StudentPortal() {
 
   // Step 2: Main Dashboard Screen
   return (
-    <div className="min-h-screen bg-[#f7f9ff] font-sans pb-32 rtl" dir="rtl">
-      {/* Top App Bar - New Design */}
-      <header className="bg-[#005bbf] shadow-md sticky top-0 z-50">
-        <div className="flex justify-between items-center px-10 w-full h-20 max-w-7xl mx-auto">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setIsSidebarOpen(true)}
-              className="text-white hover:bg-white/10 transition-colors p-1.5 rounded-full"
-            >
-              <span className="material-symbols-outlined text-4xl">menu</span>
-            </button>
-            <h1 className="text-xl md:text-2xl font-bold text-white leading-none">{settings?.systemName || 'إديو سنتر'}</h1>
+    <div className="min-h-screen bg-[#f7f9ff] font-sans rtl text-right flex flex-col lg:flex-row" dir="rtl">
+      {/* 1. Desktop Sidebar (Persistent) */}
+      <aside className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col sticky top-0 h-screen z-50">
+        <div className="p-8 flex items-center gap-4 border-b border-gray-50 bg-[#005bbf]">
+          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white font-black text-2xl border border-white/30 backdrop-blur-md">
+            {user?.displayName?.charAt(0)}
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/30">
-              {user?.photoURL ? (
-                <img src={user.photoURL} alt="User Profile Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-bold">
-                  {user?.displayName?.charAt(0)}
-                </div>
-              )}
-            </div>
+          <div className="min-w-0">
+            <h1 className="text-lg font-black text-white leading-tight truncate">{settings?.systemName || 'إديو سنتر'}</h1>
+            <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest leading-none">بوابة الطالب</p>
           </div>
         </div>
-      </header>
+
+        <nav className="flex-1 p-6 space-y-3 mt-4">
+          {[
+            { id: 'home', label: 'الرئيسية', icon: 'dashboard' },
+            { id: 'schedule', label: 'الجدول الدراسي', icon: 'calendar_month' },
+            { id: 'exams', label: 'الاختبارات', icon: 'quiz' },
+            { id: 'subjects', label: 'المعلمون', icon: 'school' },
+            { id: 'account', label: 'حسابي', icon: 'person' }
+          ].map(item => (
+            <button key={item.id} onClick={() => setActiveTab(item.id as any)} className={cn("w-full h-14 flex items-center gap-4 px-6 rounded-2xl font-black text-sm transition-all text-right", activeTab === item.id ? "bg-blue-50 text-[#005bbf] shadow-sm" : "hover:bg-gray-50 text-gray-500")}>
+              <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: activeTab === item.id ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+          
+          <div className="pt-4 mt-2 border-t border-gray-50">
+            <button
+              onClick={() => {
+                setSelectedGradeId(null);
+                setSelectedStageId(null);
+              }}
+              className="w-full h-14 flex items-center gap-4 px-6 rounded-2xl text-gray-500 font-black text-sm hover:bg-blue-50 hover:text-blue-600 transition-all group text-right"
+            >
+              <span className="material-symbols-outlined text-2xl group-hover:rotate-180 transition-transform">swap_horiz</span>
+              <span>تغيير المرحلة</span>
+            </button>
+          </div>
+        </nav>
+
+        <div className="p-6 border-t border-gray-50">
+          <button onClick={handleLogout} className="w-full h-14 flex items-center gap-4 px-6 rounded-2xl text-red-500 font-black text-sm hover:bg-red-50 transition-all text-right">
+            <span className="material-symbols-outlined text-2xl">logout</span>
+            <span>خروج آمن</span>
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* 2. Header */}
+        <header className="bg-[#005bbf] shadow-md sticky top-0 z-40">
+          <div className="flex justify-between items-center px-6 md:px-10 w-full h-16 max-w-7xl mx-auto">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="lg:hidden text-white hover:bg-white/10 transition-colors p-2 rounded-xl"
+              >
+                <span className="material-symbols-outlined text-2xl">menu</span>
+              </button>
+              <h1 className="text-lg md:text-xl font-bold text-white leading-none tracking-tight lg:hidden">{settings?.systemName || 'إديو سنتر'}</h1>
+              <div className="hidden lg:block text-white font-bold text-sm tracking-wide">
+                لوحة تحكم الطالب • {
+                  activeTab === 'home' ? 'الرئيسية' :
+                  activeTab === 'schedule' ? 'الجدول الدراسي' :
+                  activeTab === 'exams' ? 'الاختبارات والنتائج' :
+                  activeTab === 'subjects' ? 'قائمة المعلمين' :
+                  activeTab === 'account' ? 'الملف الشخصي' : ''
+                }
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex flex-col items-end">
+                <p className="text-[10px] text-white/60 font-black uppercase tracking-widest leading-none mb-1">المستخدم الحالي</p>
+                <p className="text-sm font-bold text-white leading-none">{user?.displayName}</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden border border-white/30 backdrop-blur-md shadow-lg">
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-black text-sm">{user?.displayName?.charAt(0)}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </header>
 
       {/* Side Menu Drawer */}
       <AnimatePresence>
@@ -1341,7 +1401,7 @@ export function StudentPortal() {
       </main>
 
       {/* Bottom Display Navigation - New Design */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-6 bg-white border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] rounded-t-3xl md:bg-transparent md:border-none md:shadow-none md:static md:max-w-7xl md:mx-auto md:px-6 md:pb-8">
+      <nav className="lg:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-6 bg-white border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] rounded-t-3xl md:bg-transparent md:border-none md:shadow-none md:static md:max-w-7xl md:mx-auto md:px-6 md:pb-8">
         {/* Home (Active/Normal) */}
         <button 
           onClick={() => setActiveTab('home')}
@@ -1398,5 +1458,6 @@ export function StudentPortal() {
         </div>
       </footer>
     </div>
-  );
+  </div>
+);
 }

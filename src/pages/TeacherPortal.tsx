@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { Teacher, Grade, Student, Group, Schedule, AppSettings } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
 import { Button, Input, Card, Badge, cn } from '../components/ui';
@@ -31,13 +32,13 @@ type Tab = 'home' | 'exams' | 'students' | 'profile';
 
 export default function TeacherPortal() {
   const { user, logout } = useAuth();
+  const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
@@ -104,10 +105,6 @@ export default function TeacherPortal() {
 
     onSnapshot(collection(db, 'grades'), (snapshot) => {
       setGrades(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Grade)));
-    });
-
-    onSnapshot(doc(db, 'settings', 'general'), (doc) => {
-      if (doc.exists()) setSettings(doc.data() as AppSettings);
     });
 
     return () => unsubTeacher();
