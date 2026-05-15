@@ -309,7 +309,7 @@ export default function TeacherPortal() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              <div className="lg:col-span-8 space-y-10">
+              <div className="lg:col-span-12 space-y-10">
                 {/* Today's Schedule Card */}
                 <Card className="p-10 rounded-[3.5rem] border-none shadow-[0_20px_50px_-20px_rgba(0,0,0,0.08)] relative overflow-hidden">
                    <div className="flex items-center justify-between mb-10">
@@ -350,38 +350,44 @@ export default function TeacherPortal() {
                     )}
                   </div>
                 </Card>
-              </div>
 
-              <div className="lg:col-span-4 flex flex-col gap-10">
-                {/* Important Alerts Content (Matched Player UI) */}
-                <Card className="p-10 rounded-[3rem] shadow-sm border border-gray-100 flex flex-col h-full bg-white relative overflow-hidden">
-                  <div className="flex items-center gap-4 mb-10">
-                    <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 shadow-xl shadow-red-50">
-                       <span className="material-symbols-outlined text-2xl font-bold">campaign</span>
+                {/* Important Alerts & Academic Support - Moved here */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  <Card className="p-10 rounded-[3rem] shadow-sm border border-gray-100 flex flex-col bg-white relative overflow-hidden">
+                    <div className="flex items-center gap-4 mb-10">
+                      <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 shadow-xl shadow-red-50">
+                         <span className="material-symbols-outlined text-2xl font-bold">campaign</span>
+                      </div>
+                      <h3 className="text-2xl font-black text-gray-900 leading-none">تنبيهات هامة</h3>
                     </div>
-                    <h3 className="text-2xl font-black text-gray-900 leading-none">تنبيهات هامة</h3>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <div className="p-5 rounded-[2rem] bg-amber-50/50 border border-amber-100 flex items-start gap-4 transition-all hover:scale-[1.02]">
-                       <span className="material-symbols-outlined text-amber-500 font-bold text-2xl">error</span>
-                       <div>
-                          <p className="font-black text-amber-900 text-lg">تحديث نتائج الطلاب</p>
-                          <p className="text-sm font-bold text-amber-800/60 mt-1 leading-relaxed">يرجى رفع نتائج اختبارات شهر مايو لكافة المجموعات خلال 48 ساعة.</p>
-                       </div>
+                    
+                    <div className="space-y-6">
+                      <div className="p-5 rounded-[2rem] bg-amber-50/50 border border-amber-100 flex items-start gap-4 transition-all hover:scale-[1.02]">
+                         <span className="material-symbols-outlined text-amber-500 font-bold text-2xl">error</span>
+                         <div>
+                            <p className="font-black text-amber-900 text-lg">تحديث نتائج الطلاب</p>
+                            <p className="text-sm font-bold text-amber-800/60 mt-1 leading-relaxed">يرجى رفع نتائج اختبارات شهر مايو لكافة المجموعات خلال 48 ساعة.</p>
+                         </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-auto pt-10">
-                    <div className="p-10 bg-gray-950 rounded-[3rem] text-white overflow-hidden relative shadow-2xl">
+                  </Card>
+
+                  <Card className="p-10 rounded-[3rem] shadow-sm border border-gray-100 flex flex-col bg-white relative overflow-hidden">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-[#005bbf] shadow-xl shadow-blue-50">
+                         <span className="material-symbols-outlined text-2xl font-bold">contact_support</span>
+                      </div>
+                      <h3 className="text-2xl font-black text-gray-900 leading-none">الدعم الأكاديمي</h3>
+                    </div>
+                    <div className="p-8 bg-gray-950 rounded-[2.5rem] text-white overflow-hidden relative shadow-2xl flex-1">
                        <div className="relative z-10">
-                          <h4 className="text-2xl font-black mb-3">الدعم الأكاديمي</h4>
-                          <p className="text-xs opacity-60 mb-8 font-bold leading-relaxed">فريق التقنية متاح دائماً لحل أي مشكلة تقنية تواجهك في لوحة التحكم.</p>
+                          <p className="text-xs opacity-60 mb-6 font-bold leading-relaxed">فريق التقنية متاح دائماً لحل أي مشكلة تقنية تواجهك في لوحة التحكم.</p>
                           <button className="w-full h-14 bg-blue-600 rounded-2xl font-black text-base hover:bg-blue-700 transition-all shadow-xl shadow-blue-900/40 active:scale-95">تحدث مع الفريق</button>
                        </div>
-                       <span className="material-symbols-outlined absolute -bottom-10 -right-10 text-[12rem] opacity-[0.05] rotate-12">contact_support</span>
+                       <span className="material-symbols-outlined absolute -bottom-10 -right-10 text-[10rem] opacity-[0.05] rotate-12">contact_support</span>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+                </div>
               </div>
             </div>
           </div>
