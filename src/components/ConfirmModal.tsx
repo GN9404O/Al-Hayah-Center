@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal } from './Modal';
-import { Button } from './ui';
+import { Button, cn } from './ui';
 import { AlertTriangle } from 'lucide-react';
 
 export function ConfirmModal({ 
@@ -53,5 +53,3 @@ export function ConfirmModal({
     </Modal>
   );
 }
-
-import { cn } from './ui';

@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Card, Button, Input, cn } from '../components/ui';
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, onSnapshot, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, onSnapshot, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { User as UserIcon, Shield, Bell, Lock, Globe, Settings as SettingsIcon, Search, Trash2, ShieldAlert, Check, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+import { ConfirmModal } from '../components/ConfirmModal';
 
 export function Settings() {
   const { user } = useAuth();
@@ -18,7 +20,10 @@ export function Settings() {
   const [loading, setLoading] = useState(false);
   const [systemLoading, setSystemLoading] = useState(false);
   const [alertsLoading, setAlertsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'system' | 'admins' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'system' | 'admins' | 'security' | 'teachers'>('profile');
+  
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [teacherToDelete, setTeacherToDelete] = useState<{id: string, userId?: string} | null>(null);
 
   const [alertsEnabled, setAlertsEnabled] = useState(settings?.alertsEnabled || false);
   const [alertsContent, setAlertsContent] = useState(settings?.alertsContent || '');
@@ -190,25 +195,29 @@ export function Settings() {
   };
 
   const handleUnlinkTeacher = async (teacherId: string, userId: string | undefined) => {
-    if (!confirm('هل أنت متأكد من إلغاء ربط هذا الحساب؟ سيفقد المستخدم صلاحيات المعلم.')) return;
+    setTeacherToDelete({ id: teacherId, userId });
+    setIsConfirmOpen(true);
+  };
+
+  const confirmDeleteTeacher = async () => {
+    if (!teacherToDelete) return;
 
     try {
-      if (userId) {
-        await updateDoc(doc(db, 'users', userId), {
+      if (teacherToDelete.userId) {
+        await updateDoc(doc(db, 'users', teacherToDelete.userId), {
           role: 'student',
           updatedAt: serverTimestamp()
         });
       }
 
-      await updateDoc(doc(db, 'teachers', teacherId), {
-        userId: null,
-        email: null
-      });
+      await deleteDoc(doc(db, 'teachers', teacherToDelete.id));
 
-      toast.success('تم إلغاء ربط الحساب بنجاح');
+      toast.success('تم حذف المعلم وإلغاء الربط بنجاح');
+      setIsConfirmOpen(false);
+      setTeacherToDelete(null);
     } catch (error) {
       console.error(error);
-      toast.error('حدث خطأ أثناء إلغاء الربط');
+      toast.error('حدث خطأ أثناء الحذف');
     }
   };
 
@@ -302,7 +311,14 @@ export function Settings() {
           </nav>
         </div>
 
-        <div className="md:col-span-2 space-y-6">
+      <div className="md:col-span-2 space-y-6">
+        <ConfirmModal
+          isOpen={isConfirmOpen}
+          onClose={() => setIsConfirmOpen(false)}
+          onConfirm={confirmDeleteTeacher}
+          title="حذف وحساب المعلم"
+          message="هل أنت متأكد من حذف هذا المعلم؟ سيتم مسح بياناته الشخصية وسيفقد المستخدم صلاحيات الدخول كمعلم."
+        />
           {activeTab === 'profile' && (
             <Card className="p-8">
               <h3 className="text-lg font-bold text-gray-900 mb-6">المعلومات الشخصية</h3>

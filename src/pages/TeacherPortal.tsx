@@ -219,22 +219,22 @@ export default function TeacherPortal() {
 
       {/* 2. Hero Section (Premium Gradient) */}
       {activeTab === 'home' && (
-        <section className="bg-gradient-to-br from-[#1a73e8] via-[#1a73e8] to-[#005bbf] pt-12 pb-28 px-6 text-white rounded-b-[64px] shadow-2xl relative overflow-hidden">
+        <section className="bg-gradient-to-br from-[#1a73e8] via-[#1a73e8] to-[#005bbf] pt-10 pb-16 px-6 text-white rounded-b-none shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
-             <div className="absolute top-40 right-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
-             <div className="absolute bottom-10 left-10 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+             <div className="absolute top-20 right-10 w-48 h-48 bg-white rounded-full blur-3xl"></div>
+             <div className="absolute bottom-5 left-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
           </div>
           <div className="max-w-7xl mx-auto relative z-10 text-center md:text-right">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-              <p className="text-xl opacity-80 mb-3 font-semibold">أهلاً بك مرة أخرى،</p>
-              <h2 className="text-4xl md:text-6xl font-black mb-8 tracking-tighter leading-tight">مستر {teacher?.name}</h2>
-              <div className="flex items-center gap-4 bg-white/15 backdrop-blur-2xl rounded-[2.5rem] p-6 inline-flex border border-white/10 shadow-2xl">
-                <div className="w-14 h-14 bg-yellow-400 rounded-3xl flex items-center justify-center shadow-[0_8px_30px_rgba(250,204,21,0.4)] transition-transform hover:rotate-12">
-                  <span className="material-symbols-outlined text-white text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <p className="text-lg opacity-80 mb-2 font-semibold">أهلاً بك مرة أخرى،</p>
+              <h2 className="text-3xl md:text-5xl font-black mb-6 tracking-tighter leading-tight">مستر {teacher?.name}</h2>
+              <div className="flex items-center gap-3 bg-white/15 backdrop-blur-2xl rounded-2xl p-4 inline-flex border border-white/10 shadow-xl">
+                <div className="w-10 h-10 bg-yellow-400 rounded-xl flex items-center justify-center shadow-[0_5px_15px_rgba(250,204,21,0.3)] transition-transform hover:rotate-12">
+                  <span className="material-symbols-outlined text-white text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-lg">أداؤك التعليمي مذهل!</p>
-                  <p className="text-sm opacity-80 font-bold">بإمكانك اليوم إدارة طلابك واختباراتك بكل سهولة.</p>
+                  <p className="font-black text-sm md:text-base">أداؤك التعليمي مذهل!</p>
+                  <p className="text-[10px] md:text-xs opacity-80 font-bold">بإمكانك إدارة طلابك واختباراتك بكل سهولة.</p>
                 </div>
               </div>
             </motion.div>
@@ -243,7 +243,7 @@ export default function TeacherPortal() {
       )}
 
       {/* 3. Main Content Content Area */}
-      <main className={cn("max-w-7xl mx-auto px-6 pb-20", activeTab === 'home' ? "-mt-16" : "pt-12")}>
+      <main className={cn("max-w-7xl mx-auto px-6 pb-20", activeTab === 'home' ? "-mt-10" : "pt-12")}>
         {activeTab === 'home' && (
           <div className="space-y-12">
             {/* Quick Stats Grid */}
