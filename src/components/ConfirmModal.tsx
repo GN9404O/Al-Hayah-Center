@@ -34,12 +34,9 @@ export function ConfirmModal({
           <Button 
             className="flex-1 rounded-xl h-12" 
             variant={confirmVariant as any} 
-            onClick={async () => {
-              try {
-                await onConfirm();
-              } finally {
-                onClose();
-              }
+            onClick={() => {
+              onConfirm();
+              onClose();
             }}
           >
             {confirmText}

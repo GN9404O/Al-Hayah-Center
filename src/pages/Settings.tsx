@@ -312,6 +312,13 @@ export function Settings() {
         </div>
 
       <div className="md:col-span-2 space-y-6">
+        <ConfirmModal
+          isOpen={isConfirmOpen}
+          onClose={() => setIsConfirmOpen(false)}
+          onConfirm={confirmDeleteTeacher}
+          title="حذف وحساب المعلم"
+          message="هل أنت متأكد من حذف هذا المعلم؟ سيتم مسح بياناته الشخصية وسيفقد المستخدم صلاحيات الدخول كمعلم."
+        />
           {activeTab === 'profile' && (
             <Card className="p-8">
               <h3 className="text-lg font-bold text-gray-900 mb-6">المعلومات الشخصية</h3>
@@ -685,14 +692,6 @@ export function Settings() {
           )}
         </div>
       </div>
-
-      <ConfirmModal 
-        isOpen={isConfirmOpen}
-        onClose={() => setIsConfirmOpen(false)}
-        onConfirm={confirmDeleteTeacher}
-        title="حذف معلم"
-        message="هل أنت متأكد من حذف هذا المعلم؟ سيتم إلغاء ربط حسابه وتحويل دوره إلى طالب."
-      />
     </div>
   );
 }
