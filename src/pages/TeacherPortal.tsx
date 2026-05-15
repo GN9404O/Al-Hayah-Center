@@ -331,8 +331,17 @@ export default function TeacherPortal() {
                         <div key={idx} className="bg-gray-50/70 p-8 rounded-[2.5rem] border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between group hover:bg-white hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 gap-6">
                           <div className="flex items-center gap-8">
                             <div className="w-20 h-20 bg-white rounded-[2rem] flex flex-col items-center justify-center border-2 border-blue-50 font-black text-[#005bbf] shadow-xl group-hover:bg-blue-600 group-hover:text-white transition-all overflow-hidden">
-                              <span className="text-2xl">{session.startTime.split(':')[0]}</span>
-                              <span className="text-[12px] opacity-60 -mt-1">{session.startTime.split(':')[1]}</span>
+                              {(() => {
+                                const [h, m] = session.startTime.split(':').map(Number);
+                                const ampm = h >= 12 ? 'م' : 'ص';
+                                const h12 = h % 12 || 12;
+                                return (
+                                  <>
+                                    <span className="text-2xl">{h12}</span>
+                                    <span className="text-[10px] opacity-60 -mt-1">{m.toString().padStart(2, '0')} {ampm}</span>
+                                  </>
+                                );
+                              })()}
                             </div>
                             <div>
                                <p className="text-2xl font-black text-gray-900 mb-1">{getGradeName(session.gradeId)}</p>
