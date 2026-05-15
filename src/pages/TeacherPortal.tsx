@@ -197,53 +197,94 @@ export default function TeacherPortal() {
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#f7f9ff]"><div className="w-12 h-12 border-4 border-[#1a73e8] border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
-    <div className="min-h-screen bg-[#f7f9ff] font-sans pb-32 rtl text-right" dir="rtl">
-      {/* 1. Header (Matched design) */}
-      <header className="bg-[#005bbf] shadow-md sticky top-0 z-50">
-        <div className="flex justify-between items-center px-6 md:px-10 w-full h-20 max-w-7xl mx-auto">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="text-white hover:bg-white/10 transition-colors p-2 rounded-2xl">
-              <span className="material-symbols-outlined text-3xl">menu</span>
-            </button>
-            <h1 className="text-xl md:text-2xl font-bold text-white leading-none tracking-tight">{settings?.systemName || 'إديو سنتر'}</h1>
+    <div className="min-h-screen bg-[#f7f9ff] font-sans rtl text-right flex flex-col lg:flex-row" dir="rtl">
+      {/* 1. Desktop Sidebar (Persistent) */}
+      <aside className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col sticky top-0 h-screen z-50">
+        <div className="p-8 flex items-center gap-4 border-b border-gray-50 bg-[#005bbf]">
+          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white font-black text-2xl border border-white/30 backdrop-blur-md">
+            {teacher?.name?.charAt(0)}
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center overflow-hidden border border-white/30 backdrop-blur-md">
-            {teacher?.photoURL ? (
-              <img src={teacher.photoURL} alt="User" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-black text-lg">{teacher?.name?.charAt(0)}</div>
-            )}
+          <div>
+            <h1 className="text-lg font-black text-white leading-none mb-1">{settings?.systemName || 'إديو سنتر'}</h1>
+            <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest leading-none">بوابة المعلم</p>
           </div>
         </div>
-      </header>
 
-      {/* 2. Hero Section (Premium Gradient) */}
-      {activeTab === 'home' && (
-        <section className="bg-gradient-to-br from-[#1a73e8] via-[#1a73e8] to-[#005bbf] pt-8 pb-10 px-6 text-white rounded-b-none shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
-             <div className="absolute top-10 right-10 w-48 h-48 bg-white rounded-full blur-3xl"></div>
-             <div className="absolute bottom-2 left-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
-          </div>
-          <div className="max-w-7xl mx-auto relative z-10 text-center md:text-right">
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <p className="text-sm opacity-80 mb-1 font-semibold">أهلاً بك مرة أخرى،</p>
-              <h2 className="text-2xl md:text-4xl font-black mb-4 tracking-tighter leading-tight">مستر {teacher?.name}</h2>
-              <div className="flex items-center gap-2 bg-white/15 backdrop-blur-2xl rounded-xl p-3 inline-flex border border-white/10 shadow-lg">
-                <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center shadow-[0_5px_15px_rgba(250,204,21,0.3)] transition-transform hover:rotate-12">
-                  <span className="material-symbols-outlined text-white text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-                </div>
-                <div className="text-right">
-                  <p className="font-black text-xs md:text-sm">أداؤك التعليمي مذهل!</p>
-                  <p className="text-[9px] md:text-[10px] opacity-80 font-bold">بإمكانك إدارة طلابك واختباراتك بكل سهولة.</p>
-                </div>
+        <nav className="flex-1 p-6 space-y-3 mt-4">
+          {[
+            { id: 'home', label: 'لوحة التحكم', icon: 'space_dashboard' },
+            { id: 'students', label: 'طلابي', icon: 'group' },
+            { id: 'exams', label: 'الاختبارات', icon: 'grading' },
+            { id: 'profile', label: 'الملف الشخصي', icon: 'person_outline' }
+          ].map(item => (
+            <button key={item.id} onClick={() => setActiveTab(item.id as Tab)} className={cn("w-full h-14 flex items-center gap-4 px-6 rounded-2xl font-black text-sm transition-all", activeTab === item.id ? "bg-blue-50 text-[#005bbf] shadow-sm" : "hover:bg-gray-50 text-gray-500")}>
+              <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: activeTab === item.id ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-6 border-t border-gray-50">
+          <button onClick={logout} className="w-full h-14 flex items-center gap-4 px-6 rounded-2xl text-red-500 font-black text-sm hover:bg-red-50 transition-all">
+            <span className="material-symbols-outlined text-2xl">logout</span>
+            <span>خروج آمن</span>
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* 2. Header */}
+        <header className="bg-[#005bbf] shadow-md sticky top-0 z-40">
+          <div className="flex justify-between items-center px-6 md:px-10 w-full h-16 max-w-7xl mx-auto">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden text-white hover:bg-white/10 transition-colors p-2 rounded-xl">
+                <span className="material-symbols-outlined text-2xl">menu</span>
+              </button>
+              <h1 className="text-lg md:text-xl font-bold text-white leading-none tracking-tight lg:hidden">{settings?.systemName || 'إديو سنتر'}</h1>
+              <div className="hidden lg:block text-white/80 font-bold text-sm">
+                {activeTab === 'home' && 'الرئيسية'}
+                {activeTab === 'students' && 'إدارة الطلاب'}
+                {activeTab === 'exams' && 'مركز الاختبارات'}
+                {activeTab === 'profile' && 'الملف الشخصي'}
               </div>
-            </motion.div>
+            </div>
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden border border-white/30 backdrop-blur-md">
+              {teacher?.photoURL ? (
+                <img src={teacher.photoURL} alt="User" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-black text-sm">{teacher?.name?.charAt(0)}</div>
+              )}
+            </div>
           </div>
-        </section>
-      )}
+        </header>
 
-      {/* 3. Main Content Content Area */}
-      <main className={cn("max-w-7xl mx-auto px-6 pb-20", activeTab === 'home' ? "mt-8" : "pt-12")}>
+        {/* 3. Hero Section (Matched design) */}
+        {activeTab === 'home' && (
+          <section className="bg-gradient-to-br from-[#1a73e8] via-[#1a73e8] to-[#005bbf] pt-8 pb-10 px-6 text-white rounded-b-none shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+               <div className="absolute top-10 right-10 w-48 h-48 bg-white rounded-full blur-3xl"></div>
+               <div className="absolute bottom-2 left-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
+            </div>
+            <div className="max-w-7xl mx-auto relative z-10 text-center md:text-right">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <p className="text-sm opacity-80 mb-1 font-semibold">أهلاً بك مرة أخرى،</p>
+                <h2 className="text-2xl md:text-4xl font-black mb-4 tracking-tighter leading-tight">مستر {teacher?.name}</h2>
+                <div className="flex items-center gap-2 bg-white/15 backdrop-blur-2xl rounded-xl p-3 inline-flex border border-white/10 shadow-lg">
+                  <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center shadow-[0_5px_15px_rgba(250,204,21,0.3)] transition-transform hover:rotate-12">
+                    <span className="material-symbols-outlined text-white text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-black text-xs md:text-sm">أداؤك التعليمي مذهل!</p>
+                    <p className="text-[9px] md:text-[10px] opacity-80 font-bold">بإمكانك إدارة طلابك واختباراتك بكل سهولة.</p>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </section>
+        )}
+
+        {/* 4. Main Content Area */}
+        <main className={cn("max-w-7xl mx-auto px-6 pb-20 w-full", activeTab === 'home' ? "mt-8" : "pt-12")}>
         {activeTab === 'home' && (
           <div className="space-y-12">
             {/* Quick Stats Grid */}
@@ -642,6 +683,7 @@ export default function TeacherPortal() {
             </div>
          </form>
       </Modal>
+      </div>
     </div>
   );
 }
