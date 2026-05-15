@@ -589,8 +589,8 @@ export default function TeacherPortal() {
         )}
       </AnimatePresence>
 
-      {/* 5. Mobile Bottom Navbar (Matched exactly to Player) */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pt-3 pb-10 bg-white border-t border-gray-100 shadow-[0_-15px_60px_rgba(0,0,0,0.06)] rounded-t-[3.5rem] md:hidden">
+      {/* 5. Mobile Bottom Navbar (Rectangular Design) */}
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-white border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.08)] md:hidden">
          {[
            { id: 'home', label: 'الرئيسية', icon: 'dashboard' },
            { id: 'students', label: 'طلابي', icon: 'groups' },
@@ -599,10 +599,9 @@ export default function TeacherPortal() {
          ].map(item => {
            const active = activeTab === item.id;
            return (
-             <button key={item.id} onClick={() => setActiveTab(item.id as Tab)} className={cn("flex flex-col items-center justify-center transition-all px-6 py-2 rounded-[1.5rem] relative", active ? "text-[#005bbf] bg-blue-50/50 scale-110" : "text-gray-400")}>
-                <span className="material-symbols-outlined text-2xl font-bold" style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
-                <span className="text-[10px] font-black mt-1.5 uppercase tracking-tighter">{item.label}</span>
-                {active && <motion.div layoutId="nav_bubble" className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1.5 bg-[#005bbf] rounded-full" />}
+             <button key={item.id} onClick={() => setActiveTab(item.id as Tab)} className={cn("flex flex-col items-center justify-center transition-all px-4 py-2 rounded-xl relative", active ? "text-[#005bbf] bg-blue-50/50" : "text-gray-400")}>
+                <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
+                <span className="text-[10px] font-black mt-1 uppercase tracking-tighter">{item.label}</span>
              </button>
            );
          })}
