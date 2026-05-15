@@ -487,383 +487,100 @@ export function StudentPortal() {
 
   // Step 2: Main Dashboard Screen
   return (
-    <div className="min-h-screen bg-[#f7f9ff] font-sans pb-32 rtl" dir="rtl">
-      {/* Top App Bar - New Design */}
-      <header className="bg-[#005bbf] shadow-md sticky top-0 z-50">
-        <div className="flex justify-between items-center px-10 w-full h-20 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#f7f9ff] font-sans rtl text-right flex flex-col lg:flex-row" dir="rtl">
+      {/* 2. Persistent Desktop Sidebar */}
+      <aside className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col sticky top-0 h-screen z-50 overflow-y-auto">
+        <div className="p-8 border-b border-gray-50 bg-gray-50/30">
+          <h1 className="text-xl font-black text-[#005bbf] leading-none">{settings?.systemName || 'إديو سنتر'}</h1>
+          <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-widest">بوابة الطالب</p>
+        </div>
+
+        <div className="flex-1 p-6 space-y-2">
+          {[
+            { id: 'home', label: 'الرئيسية', icon: 'dashboard' },
+            { id: 'schedule', label: 'الجدول الدراسي', icon: 'calendar_month' },
+            { id: 'exams', label: 'الاختبارات', icon: 'quiz' },
+            { id: 'subjects', label: 'المعلمون', icon: 'school' },
+            { id: 'account', label: 'حسابي', icon: 'person' }
+          ].map(item => {
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id as any)}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl transition-all font-bold group",
+                  active ? "bg-blue-600 text-white shadow-lg shadow-blue-100" : "hover:bg-gray-50 text-gray-600"
+                )}
+              >
+                <span className={cn("material-symbols-outlined", active ? "text-white" : "text-gray-400 group-hover:text-blue-600")}>{item.icon}</span>
+                <span className="text-sm">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="p-6 border-t border-gray-50 space-y-4">
+           <button
+              onClick={() => {
+                setSelectedGradeId(null);
+                setSelectedStageId(null);
+              }}
+              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-blue-50 text-gray-500 hover:text-blue-600 font-bold transition-all group"
+            >
+              <span className="material-symbols-outlined text-gray-300 group-hover:text-blue-600">swap_horiz</span>
+              <span className="text-xs">تغيير المرحلة</span>
+            </button>
+            <button 
+              onClick={logout}
+              className="w-full h-12 bg-red-50 text-red-600 rounded-xl font-black text-xs flex items-center justify-center gap-2 hover:bg-red-600 hover:text-white transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+              تسجيل الخروج
+            </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="bg-white border-b border-gray-100 h-20 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="text-white hover:bg-white/10 transition-colors p-1.5 rounded-full"
+              className="lg:hidden text-gray-400 hover:text-blue-600 transition-colors"
             >
-              <span className="material-symbols-outlined text-4xl">menu</span>
+              <span className="material-symbols-outlined text-3xl">menu</span>
             </button>
-            <h1 className="text-xl md:text-2xl font-bold text-white leading-none">{settings?.systemName || 'إديو سنتر'}</h1>
+            <h2 className="text-xl font-black text-gray-900 truncate">
+              {activeTab === 'home' && 'الرئيسية'}
+              {activeTab === 'schedule' && 'الجدول الدراسي'}
+              {activeTab === 'exams' && 'الاختبارات والحصاد'}
+              {activeTab === 'subjects' && 'معلمو المركز'}
+              {activeTab === 'account' && 'الملف الشخصي'}
+            </h2>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/30">
+          
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex flex-col text-left">
+              <span className="text-sm font-black text-gray-900 leading-none">{user?.displayName}</span>
+              <span className="text-[10px] text-gray-400 font-bold mt-1">طالب مسجل</span>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 overflow-hidden">
               {user?.photoURL ? (
-                <img src={user.photoURL} alt="User Profile Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img src={user.photoURL} alt="p" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-bold">
+                 <div className="w-full h-full flex items-center justify-center text-blue-600 font-bold">
                   {user?.displayName?.charAt(0)}
                 </div>
               )}
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Side Menu Drawer */}
-      <AnimatePresence>
-        {isSidebarOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsSidebarOpen(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60]"
-            />
-            
-            {/* Drawer */}
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 h-full w-80 bg-white z-[70] shadow-2xl flex flex-col p-6 rtl"
-              dir="rtl"
-            >
-              <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-50">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center overflow-hidden border border-blue-100">
-                    {user?.photoURL ? (
-                      <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-blue-600 font-black text-xl bg-blue-50">
-                        {user?.displayName?.charAt(0)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-grow min-w-0">
-                    <p className="font-bold text-gray-900 truncate leading-tight">{user?.displayName}</p>
-                    <p className="text-xs text-gray-400 truncate mt-0.5">{user?.email}</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setIsSidebarOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors group"
-                >
-                  <X className="w-6 h-6 text-gray-400 group-hover:text-red-500 transition-colors" />
-                </button>
-              </div>
-
-              <div className="flex-grow space-y-2">
-                <button
-                  onClick={() => {
-                    setIsSidebarOpen(false);
-                    setActiveTab('home');
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
-                    activeTab === 'home' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
-                  )}
-                >
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'home' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
-                    <span className="material-symbols-outlined">dashboard</span>
-                  </div>
-                  <span>الرئيسية</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsSidebarOpen(false);
-                    setActiveTab('schedule');
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
-                    activeTab === 'schedule' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
-                  )}
-                >
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'schedule' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
-                    <span className="material-symbols-outlined">calendar_month</span>
-                  </div>
-                  <span>الجدول الدراسي</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsSidebarOpen(false);
-                    setActiveTab('exams');
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
-                    activeTab === 'exams' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
-                  )}
-                >
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'exams' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
-                    <span className="material-symbols-outlined">quiz</span>
-                  </div>
-                  <span>الاختبارات</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsSidebarOpen(false);
-                    setActiveTab('subjects');
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
-                    activeTab === 'subjects' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
-                  )}
-                >
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'subjects' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
-                    <span className="material-symbols-outlined">school</span>
-                  </div>
-                  <span>المعلمون</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsSidebarOpen(false);
-                    setActiveTab('account');
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold group",
-                    activeTab === 'account' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "hover:bg-gray-50 text-gray-700"
-                  )}
-                >
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", activeTab === 'account' ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100")}>
-                    <span className="material-symbols-outlined">person</span>
-                  </div>
-                  <span>حسابي</span>
-                </button>
-
-                <div className="pt-4 mt-2 border-t border-gray-50">
-                  <button
-                    onClick={() => {
-                      setIsSidebarOpen(false);
-                      setSelectedGradeId(null);
-                      setSelectedStageId(null);
-                    }}
-                    className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-blue-50 text-gray-700 hover:text-blue-600 font-bold transition-all group"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                      <span className="material-symbols-outlined text-gray-400 group-hover:text-blue-600">swap_horiz</span>
-                    </div>
-                    <span>تغيير المرحلة الدراسية</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-auto pt-6 border-t border-gray-50 space-y-4">
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-red-50 text-red-500 font-black transition-all group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center group-hover:bg-red-100 transition-colors">
-                    <LogOut className="w-5 h-5" />
-                  </div>
-                  <span>تسجيل الخروج</span>
-                </button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      <main className="pb-32">
-        {selectedTeacherProfile ? (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="max-w-4xl mx-auto px-6 py-12 pb-32"
-          >
-            {/* Back Button */}
-            <button 
-              onClick={() => setSelectedTeacherProfile(null)}
-              className="flex items-center gap-2 text-gray-500 hover:text-[#005bbf] font-bold mb-8 transition-colors group"
-            >
-              <X className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-              العودة لقائمة المعلمين
-            </button>
-
-            <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-50">
-              {/* Header/Cover */}
-              <div className="h-48 bg-[#005bbf] relative overflow-hidden">
-                <div className="absolute inset-0 opacity-10">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-32 translate-x-32" />
-                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-24 -translate-x-24" />
-                </div>
-              </div>
-
-              {/* Profile Image */}
-              <div className="px-12 -mt-20 relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div className="w-40 h-40 rounded-3xl border-8 border-white bg-white shadow-2xl overflow-hidden flex items-center justify-center">
-                  {selectedTeacherProfile.photoURL ? (
-                    <img src={selectedTeacherProfile.photoURL} alt={selectedTeacherProfile.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-5xl">
-                      {selectedTeacherProfile.name.charAt(0)}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="pb-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="bg-green-500 w-3 h-3 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]"></span>
-                    <span className="text-green-600 font-bold text-sm">متصل الآن</span>
-                  </div>
-                  <h3 className="text-4xl font-bold text-gray-900 mb-1">{selectedTeacherProfile.name}</h3>
-                  <p className="text-[#005bbf] font-bold text-xl">{selectedTeacherProfile.subject}</p>
-                </div>
-              </div>
-
-              {/* Details */}
-              <div className="p-12 pt-8">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                  <div className="p-6 bg-gray-50 rounded-3xl flex items-center gap-4 border border-transparent hover:border-blue-100 transition-colors">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                      <Phone className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">رقم الهاتف</p>
-                      <p className="text-sm font-bold text-gray-900" dir="ltr">{selectedTeacherProfile.phone}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6 bg-gray-50 rounded-3xl flex items-center gap-4 border border-transparent hover:border-blue-100 transition-colors">
-                    <div className="w-12 h-12 rounded-2xl bg-yellow-100 text-yellow-600 flex items-center justify-center">
-                      <Star className="w-6 h-6 fill-current" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">التقييم</p>
-                      <p className="text-sm font-bold text-gray-900">4.9 / 5.0</p>
-                    </div>
-                  </div>
-
-                  <div className="p-6 bg-gray-50 rounded-3xl flex items-center gap-4 border border-transparent hover:border-blue-100 transition-colors">
-                    <div className="w-12 h-12 rounded-2xl bg-green-100 text-green-600 flex items-center justify-center">
-                      <ShieldCheck className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">الخبرة</p>
-                      <p className="text-sm font-bold text-gray-900">{selectedTeacherProfile.experience || 'خبير تعليمي'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                  <div className="lg:col-span-2 space-y-10">
-                    {/* Bio */}
-                    <div>
-                      <h4 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-3">
-                        <span className="w-2 h-8 bg-[#005bbf] rounded-full"></span>
-                        نبذة تعريفية
-                      </h4>
-                      <div className="text-gray-600 leading-relaxed text-lg bg-gray-50/50 p-8 rounded-[2rem] border border-gray-100">
-                        {selectedTeacherProfile.bio || 'لا توجد نبذة تعريفية مضافة لهذا المعلم حالياً.'}
-                      </div>
-                    </div>
-
-                    {/* Chat Button */}
-                    <button 
-                      onClick={() => toast.success('سيتوفر خيار المراسلة قريباً')}
-                      className="w-full h-16 rounded-2xl bg-[#005bbf] text-white font-bold text-lg flex items-center justify-center gap-4 hover:shadow-2xl hover:shadow-blue-200 transition-all active:scale-[0.98] shadow-lg shadow-blue-100"
-                    >
-                      <Mail className="w-6 h-6" />
-                      إرسال رسالة مباشرة للمعلم
-                    </button>
-                  </div>
-
-                  <div className="space-y-10">
-                    {/* Social Links */}
-                    {selectedTeacherProfile.socialLinks && Object.values(selectedTeacherProfile.socialLinks).some(link => link) && (
-                      <div>
-                        <h4 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                          <span className="w-2 h-8 bg-pink-500 rounded-full"></span>
-                          تواصل معي
-                        </h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          {selectedTeacherProfile.socialLinks.facebook && (
-                            <a href={selectedTeacherProfile.socialLinks.facebook} target="_blank" rel="noreferrer" className="h-16 rounded-2xl bg-[#e7f3ff] text-[#1877f2] flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
-                              <Facebook className="w-7 h-7" />
-                            </a>
-                          )}
-                          {selectedTeacherProfile.socialLinks.instagram && (
-                            <a href={selectedTeacherProfile.socialLinks.instagram} target="_blank" rel="noreferrer" className="h-16 rounded-2xl bg-[#fff0f0] text-[#e4405f] flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
-                              <Instagram className="w-7 h-7" />
-                            </a>
-                          )}
-                          {selectedTeacherProfile.socialLinks.youtube && (
-                            <a href={selectedTeacherProfile.socialLinks.youtube} target="_blank" rel="noreferrer" className="h-16 rounded-2xl bg-[#ffe6e6] text-[#ff0000] flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
-                              <Youtube className="w-7 h-7" />
-                            </a>
-                          )}
-                          {selectedTeacherProfile.socialLinks.twitter && (
-                            <a href={selectedTeacherProfile.socialLinks.twitter} target="_blank" rel="noreferrer" className="h-16 rounded-2xl bg-[#e8f5fd] text-[#1da1f2] flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
-                              <Twitter className="w-7 h-7" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Stats or Badges */}
-                    <div className="bg-gray-900 rounded-[2rem] p-8 text-white">
-                      <h4 className="font-bold text-lg mb-6">إحصائيات المعلم</h4>
-                      <div className="space-y-6">
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-400 text-sm">عدد الطلاب</span>
-                          <span className="font-bold">1,240+</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-400 text-sm">المحاضرات المنشورة</span>
-                          <span className="font-bold">85+</span>
-                        </div>
-                        <div className="pt-4 border-t border-gray-800">
-                          <p className="text-[10px] text-gray-500 uppercase font-bold mb-2">الوسم التعليمي</p>
-                          <span className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-lg text-xs font-bold border border-blue-600/30">
-                            معلم معتمد
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          <>
-            {activeTab === 'home' && (
-              <section className="bg-gradient-to-br from-[#1a73e8] to-[#005bbf] pt-12 pb-24 px-6 text-white rounded-b-[48px] shadow-2xl">
-                <div className="max-w-7xl mx-auto text-center md:text-right">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                  >
-                    <p className="text-lg opacity-80 mb-2 font-medium">مرحباً بك مجدداً،</p>
-                    <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">{user?.displayName}</h2>
-                    <div className="flex items-center gap-3 bg-white/10 backdrop-blur-xl rounded-2xl p-4 inline-flex border border-white/10 shadow-lg">
-                      <div className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(250,204,21,0.4)]">
-                        <span className="material-symbols-outlined text-white text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
-                      </div>
-                      <span className="text-sm md:text-base font-bold">جدولك الدراسي المزدحم بانتظارك! نتمنى لك يوماً موفقاً.</span>
-                    </div>
-                  </motion.div>
-                </div>
-              </section>
-            )}
-
-            {/* Content Area */}
-            <section className={`max-w-7xl mx-auto px-6 pb-24 ${activeTab === 'home' ? '-mt-12' : 'mt-8'}`}>
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            
-            {/* Main Content */}
-            <div className={`${activeTab === 'home' ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col gap-10`}>
+        <main className={cn("flex-grow", activeTab === 'home' ? "" : "p-6 lg:p-10")}>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          
+          {/* Main Content */}
+          <div className={`${activeTab === 'home' ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col gap-10`}>
               
               {/* Today's Schedule Tab - New Design */}
               {activeTab === 'home' && (
@@ -1335,56 +1052,58 @@ export function StudentPortal() {
               </div>
             </div>
           </div>
-        </section>
-          </>
-        )}
-      </main>
+        </main>
 
-      {/* Bottom Display Navigation - New Design */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-6 bg-white border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] rounded-t-3xl md:bg-transparent md:border-none md:shadow-none md:static md:max-w-7xl md:mx-auto md:px-6 md:pb-8">
-        {/* Home (Active/Normal) */}
+      {/* Bottom Display Navigation (Mobile Only) */}
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-white border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] lg:hidden">
+        {/* Home */}
         <button 
           onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'home' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-4 py-2 ${activeTab === 'home' ? 'text-[#001a41]' : 'text-gray-400'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'home' ? "'FILL' 1" : "'FILL' 0" }}>dashboard</span>
-          <span className="text-[10px] font-bold mt-1">الرئيسية</span>
+          <span className="text-[9px] font-black mt-1">الرئيسية</span>
+          {activeTab === 'home' && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1" />}
         </button>
 
         {/* Schedule */}
         <button 
           onClick={() => setActiveTab('schedule')}
-          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'schedule' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-4 py-2 ${activeTab === 'schedule' ? 'text-[#001a41]' : 'text-gray-400'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'schedule' ? "'FILL' 1" : "'FILL' 0" }}>calendar_month</span>
-          <span className="text-[10px] font-bold mt-1">الجدول</span>
+          <span className="text-[9px] font-black mt-1">الجدول</span>
+          {activeTab === 'schedule' && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1" />}
         </button>
 
         {/* Exams */}
         <button 
           onClick={() => setActiveTab('exams')}
-          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'exams' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-4 py-2 ${activeTab === 'exams' ? 'text-[#001a41]' : 'text-gray-400'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'exams' ? "'FILL' 1" : "'FILL' 0" }}>quiz</span>
-          <span className="text-[10px] font-bold mt-1">الاختبارات</span>
+          <span className="text-[9px] font-black mt-1">الاختبارات</span>
+          {activeTab === 'exams' && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1" />}
         </button>
 
         {/* Subjects */}
         <button 
           onClick={() => setActiveTab('subjects')}
-          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'subjects' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-4 py-2 ${activeTab === 'subjects' ? 'text-[#001a41]' : 'text-gray-400'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'subjects' ? "'FILL' 1" : "'FILL' 0" }}>school</span>
-          <span className="text-[10px] font-bold mt-1">المعلمون</span>
+          <span className="text-[9px] font-black mt-1">المعلمون</span>
+          {activeTab === 'subjects' && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1" />}
         </button>
 
         {/* Profile */}
         <button 
           onClick={() => setActiveTab('account')}
-          className={`flex flex-col items-center justify-center transition-all px-2 py-2 rounded-2xl ${activeTab === 'account' ? 'bg-[#d8e2ff] text-[#001a41]' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex flex-col items-center justify-center transition-all px-4 py-2 ${activeTab === 'account' ? 'text-[#001a41]' : 'text-gray-400'}`}
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'account' ? "'FILL' 1" : "'FILL' 0" }}>person</span>
-          <span className="text-[10px] font-bold mt-1">حسابي</span>
+          <span className="text-[9px] font-black mt-1">حسابي</span>
+          {activeTab === 'account' && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1" />}
         </button>
       </nav>
 
@@ -1398,5 +1117,6 @@ export function StudentPortal() {
         </div>
       </footer>
     </div>
+  </div>
   );
 }
