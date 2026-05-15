@@ -44,8 +44,11 @@ export default function TeacherPortal() {
   // Profile state
   const [profileForm, setProfileForm] = useState({
     name: '',
+    email: '',
     phone: '',
     subject: '',
+    notes: '',
+    gradeIds: [] as string[],
     bio: '',
     experience: '',
     photoURL: '',
@@ -80,8 +83,11 @@ export default function TeacherPortal() {
         setTeacher(teacherData);
         setProfileForm({
           name: teacherData.name,
+          email: teacherData.email || '',
           phone: teacherData.phone,
           subject: teacherData.subject,
+          notes: teacherData.notes || '',
+          gradeIds: teacherData.gradeIds || [],
           bio: teacherData.bio || '',
           experience: teacherData.experience || '',
           photoURL: teacherData.photoURL || '',
@@ -169,6 +175,15 @@ export default function TeacherPortal() {
     } catch {
       toast.error('حدث خطأ أثناء الحفظ');
     }
+  };
+
+  const toggleGrade = (gradeId: string) => {
+    setProfileForm(prev => ({
+      ...prev,
+      gradeIds: prev.gradeIds.includes(gradeId)
+        ? prev.gradeIds.filter(id => id !== gradeId)
+        : [...prev.gradeIds, gradeId]
+    }));
   };
 
   const getGradeName = (gradeId: string) => {
@@ -386,7 +401,146 @@ export default function TeacherPortal() {
           </div>
         )}
 
-        {/* Similar updates for Exams and Profile tabs... */}
+        {activeTab === 'exams' && (
+          <div className="space-y-12 animate-in fade-in duration-700">
+             <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-10 rounded-[3.5rem] shadow-[0_15px_50px_-20px_rgba(0,0,0,0.03)] border border-gray-50 gap-6">
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900 mb-2">إدارة الاختبارات</h2>
+                  <p className="text-gray-400 font-bold text-lg">قم بإنشاء ومتابعة اختبارات طلابك</p>
+                </div>
+                <Button onClick={() => { setIsExamModalOpen(true); setCurrentExam(null); setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '' }); }} className="h-16 px-10 rounded-2xl gap-3 text-xl font-black shadow-2xl shadow-blue-200">
+                  <span className="material-symbols-outlined">add_circle</span>
+                  إضافة اختبار
+                </Button>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+               {exams.length === 0 ? (
+                 <div className="col-span-full py-40 flex flex-col items-center justify-center text-gray-300">
+                    <span className="material-symbols-outlined text-9xl mb-8 opacity-10">assignment_late</span>
+                    <p className="text-2xl font-black opacity-30 italic">لا يوجد اختبارات مضافة حالياً</p>
+                 </div>
+               ) : exams.map((exam, i) => (
+                 <Card key={i} className="p-8 rounded-[3rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.06)] border-none group relative overflow-hidden flex flex-col space-y-6 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
+                    <div className="flex justify-between items-start">
+                       <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center shadow-inner">
+                          <span className="material-symbols-outlined text-3xl">quiz</span>
+                       </div>
+                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => { setCurrentExam(exam); setExamForm({ title: exam.title, gradeId: exam.gradeId, date: exam.date, duration: exam.duration, totalMarks: exam.totalMarks, description: exam.description || '' }); setIsExamModalOpen(true); }} className="w-10 h-10 bg-gray-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all">
+                             <span className="material-symbols-outlined text-xl">edit</span>
+                          </button>
+                          <button onClick={async () => { if(confirm('هل أنت متأكد من حذف هذا الاختبار؟')) await deleteDoc(doc(db, 'exams', exam.id)); }} className="w-10 h-10 bg-gray-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">
+                             <span className="material-symbols-outlined text-xl">trash</span>
+                          </button>
+                       </div>
+                    </div>
+                    <div>
+                       <h4 className="text-2xl font-black text-gray-900 mb-2 leading-tight">{exam.title}</h4>
+                       <div className="flex flex-wrap gap-2">
+                          <Badge className="bg-blue-50 text-blue-600 border-none font-black">{getGradeName(exam.gradeId)}</Badge>
+                          <Badge className="bg-green-50 text-green-600 border-none font-black">{exam.totalMarks} درجة</Badge>
+                       </div>
+                    </div>
+                    <div className="pt-6 border-t border-gray-50 flex items-center justify-between text-gray-400 font-bold text-xs uppercase tracking-widest">
+                       <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-lg">calendar_today</span>
+                          <span>{exam.date}</span>
+                       </div>
+                       <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-lg">timer</span>
+                          <span>{exam.duration} دقيقة</span>
+                       </div>
+                    </div>
+                 </Card>
+               ))}
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'profile' && (
+          <div className="space-y-12 animate-in fade-in duration-700 max-w-4xl mx-auto">
+             <div className="text-center md:text-right">
+                <h2 className="text-3xl font-black text-gray-900 mb-2">الملف الشخصي</h2>
+                <p className="text-gray-400 font-bold text-lg">قم بتحديث بياناتك الشخصية وروابط التواصل الخاصة بك</p>
+             </div>
+
+             <form onSubmit={handleUpdateProfile} className="space-y-10">
+                <Card className="p-10 rounded-[3.5rem] shadow-[0_20px_50px_-20px_rgba(0,0,0,0.08)] border-none relative overflow-hidden bg-white">
+                   <div className="absolute top-0 right-0 w-40 h-40 bg-blue-50/50 rounded-full -mr-20 -mt-20"></div>
+                   <div className="relative z-10 space-y-10">
+                      <div className="flex flex-col md:flex-row gap-10 items-center md:items-start text-center md:text-right">
+                         <div className="w-40 h-40 bg-blue-50 rounded-[3rem] flex items-center justify-center text-[#005bbf] text-6xl font-black overflow-hidden shadow-inner flex-shrink-0 border-8 border-white ring-1 ring-blue-50 relative group">
+                            {profileForm.photoURL ? (
+                              <img src={profileForm.photoURL} alt="Profile" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                            ) : (
+                              profileForm.name.charAt(0)
+                            )}
+                         </div>
+                         <div className="flex-1 space-y-6 w-full">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                               <Input label="الاسم الكامل" value={profileForm.name} onChange={e => setProfileForm({ ...profileForm, name: e.target.value })} required icon={<User className="w-4 h-4" />} />
+                               <Input label="المادة الدراسية" value={profileForm.subject} onChange={e => setProfileForm({ ...profileForm, subject: e.target.value })} required icon={<BookOpen className="w-4 h-4" />} />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                               <Input label="رقم الهاتف" value={profileForm.phone} onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })} required />
+                               <Input label="البريد الإلكتروني للطلاب" type="email" value={profileForm.email} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} placeholder="teacher@example.com" />
+                            </div>
+                         </div>
+                      </div>
+
+                      <div className="space-y-6 pt-10 border-t border-gray-50">
+                         <h4 className="text-xl font-black text-gray-900">معلومات إضافية</h4>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Input label="رابط الصورة الشخصية (ImgBB)" value={profileForm.photoURL} onChange={e => setProfileForm({ ...profileForm, photoURL: e.target.value })} placeholder="https://i.ibb.co/..." />
+                            <Input label="سنوات الخبرة" value={profileForm.experience} onChange={e => setProfileForm({ ...profileForm, experience: e.target.value })} placeholder="مثال: 10 سنوات خبرة" />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-sm font-black text-gray-700 mr-2">نبذة تعريفية (Bio)</label>
+                            <textarea value={profileForm.bio} onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })} className="w-full bg-gray-50 border-none rounded-3xl p-6 font-bold text-sm min-h-[150px] focus:ring-4 focus:ring-blue-100 transition-all" placeholder="اكتب نبذة عنك وعن أسلوبك في التدريس..." />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-sm font-black text-gray-700 mr-2">ملاحظات (Notes)</label>
+                            <textarea value={profileForm.notes} onChange={e => setProfileForm({ ...profileForm, notes: e.target.value })} className="w-full bg-gray-50 border-none rounded-3xl p-6 font-bold text-sm min-h-[100px] focus:ring-4 focus:ring-blue-100 transition-all" placeholder="أي ملاحظات إضافية ترغب في تسجيلها..." />
+                         </div>
+                      </div>
+
+                      <div className="space-y-6 pt-10 border-t border-gray-50">
+                        <h4 className="text-xl font-black text-gray-900">الصفوف الدراسية</h4>
+                        <div className="p-6 bg-gray-50 rounded-[2.5rem] border border-gray-100 space-y-6">
+                           {ACADEMIC_STAGES.map(stage => (
+                             <div key={stage.id} className="space-y-3">
+                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest px-4">{stage.name}</p>
+                                <div className="flex flex-wrap gap-2">
+                                   {stage.grades.map(grade => (
+                                     <button key={grade.id} type="button" onClick={() => toggleGrade(grade.id)} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all border", profileForm.gradeIds.includes(grade.id) ? "bg-[#005bbf] text-white border-[#005bbf] shadow-lg shadow-blue-100" : "bg-white text-gray-500 border-gray-100")}>
+                                        {grade.name}
+                                     </button>
+                                   ))}
+                                </div>
+                             </div>
+                           ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-6 pt-10 border-t border-gray-50">
+                         <h4 className="text-xl font-black text-gray-900 border-r-4 border-blue-600 pr-4 mt-4">روابط التواصل</h4>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <Input label="فيسبوك" value={profileForm.socialLinks.facebook} onChange={e => setProfileForm({ ...profileForm, socialLinks: { ...profileForm.socialLinks, facebook: e.target.value } })} />
+                            <Input label="تويتر" value={profileForm.socialLinks.twitter} onChange={e => setProfileForm({ ...profileForm, socialLinks: { ...profileForm.socialLinks, twitter: e.target.value } })} />
+                            <Input label="إنستجرام" value={profileForm.socialLinks.instagram} onChange={e => setProfileForm({ ...profileForm, socialLinks: { ...profileForm.socialLinks, instagram: e.target.value } })} />
+                            <Input label="يوتيوب" value={profileForm.socialLinks.youtube} onChange={e => setProfileForm({ ...profileForm, socialLinks: { ...profileForm.socialLinks, youtube: e.target.value } })} />
+                         </div>
+                      </div>
+
+                      <div className="pt-10 flex justify-end">
+                         <Button type="submit" className="h-16 px-16 rounded-2xl text-xl font-black shadow-2xl shadow-blue-200">حفظ التعديلات</Button>
+                      </div>
+                   </div>
+                </Card>
+             </form>
+          </div>
+        )}
       </main>
 
       {/* 4. Navigation Menu Drawer */}
