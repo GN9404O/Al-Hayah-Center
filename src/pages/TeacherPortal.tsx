@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Teacher, Grade, Student, Group, Schedule, AppSettings } from '../types';
@@ -128,7 +128,8 @@ export default function TeacherPortal() {
 
     const unsubExams = onSnapshot(
       query(collection(db, 'exams'), where('teacherId', '==', teacher.id), orderBy('createdAt', 'desc')),
-      (snapshot) => setExams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+      (snapshot) => setExams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+      (error) => handleFirestoreError(error, OperationType.LIST, 'exams')
     );
 
     return () => {
@@ -163,6 +164,30 @@ export default function TeacherPortal() {
     e.preventDefault();
     if (!teacher) return;
     try {
+      let finalQuestions = [...(examForm.questions || [])];
+
+      // Auto-import if prompt is filled but questions are empty
+      if (finalQuestions.length === 0 && jsonPrompt.trim()) {
+        try {
+          const parsed = JSON.parse(jsonPrompt);
+          if (Array.isArray(parsed)) {
+            finalQuestions = parsed.map((item: any) => ({
+              question: item.q || item.question || '',
+              options: item.o || item.options || item.a || [],
+              correctAnswer: typeof item.c !== 'undefined' ? item.c : (typeof item.correctAnswer !== 'undefined' ? item.correctAnswer : 0),
+              marks: item.m || item.marks || (Number(examForm.totalMarks) / parsed.length || 0)
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to auto-parse questions", e);
+        }
+      }
+
+      if (finalQuestions.length === 0) {
+        toast.error('عذراً، يجب إضافة أسئلة للاختبار أولاً عن طريق استيراد JSON أو إدخالها يدوياً');
+        return;
+      }
+
       const examData = {
         title: examForm.title || '',
         gradeId: examForm.gradeId || '',
@@ -171,7 +196,7 @@ export default function TeacherPortal() {
         totalMarks: examForm.totalMarks || '',
         description: examForm.description || '',
         accessCode: examForm.accessCode || '',
-        questions: examForm.questions || [],
+        questions: finalQuestions,
         teacherId: teacher.id,
         teacherName: teacher.name || 'معلم',
         subject: teacher.subject || 'مادة',
@@ -188,8 +213,7 @@ export default function TeacherPortal() {
       setCurrentExam(null);
       toast.success('تم الحفظ بنجاح');
     } catch (error) {
-      console.error('Error saving exam:', error);
-      toast.error('حدث خطأ أثناء الحفظ');
+      handleFirestoreError(error, currentExam ? OperationType.UPDATE : OperationType.CREATE, 'exams');
     }
   };
 
@@ -740,62 +764,87 @@ export default function TeacherPortal() {
                <Input label="رمز دخول الاختبار" value={examForm.accessCode} onChange={e => setExamForm({ ...examForm, accessCode: e.target.value })} required placeholder="مثال: CHEM2026" />
             </div>
 
-            <div className="space-y-4 pt-6 border-t border-gray-50">
+            <div className="space-y-6 pt-6 border-t border-gray-50">
                <div className="flex items-center justify-between">
                   <h4 className="text-xl font-black text-gray-900 flex items-center gap-3">
                      <span className="material-symbols-outlined text-blue-600">psychology</span>
-                     إضافة الأسئلة (JSON Prompt)
+                     إضافة الأسئلة (JSON)
                   </h4>
-                  <div className="flex gap-4">
-                    <button type="button" onClick={() => {
+                  <button type="button" onClick={() => {
                         const template = `[
   {
-    "q": "السؤال الأول يوضع هنا كلياً",
-    "o": ["الاختيار الأول", "الاختيار الثاني", "الاختيار الثالث", "الاختيار الرابع"],
+    "q": "أكتب السؤال هنا...",
+    "o": ["اختيار 1", "اختيار 2", "اختيار 3", "اختيار 4"],
     "c": 0,
     "m": 5
   }
 ]`;
                         navigator.clipboard.writeText(template);
                         toast.success('تم نسخ القالب إلى الحافظة');
-                    }} className="text-gray-400 font-bold text-xs hover:text-blue-600 flex items-center gap-1 border border-gray-200 px-3 py-1 rounded-xl transition-all">
-                      <span className="material-symbols-outlined text-sm">content_copy</span>
-                      نسخ القالب
-                    </button>
-                    <button type="button" onClick={() => {
-                       try {
-                          const parsed = JSON.parse(jsonPrompt);
-                          if (!Array.isArray(parsed)) throw new Error('يجب أن يكون JSON مصفوفة');
-                          
-                          const normalized = parsed.map((item: any) => ({
-                             question: item.q || item.question || '',
-                             options: item.o || item.options || item.a || [],
-                             correctAnswer: typeof item.c !== 'undefined' ? item.c : (typeof item.correctAnswer !== 'undefined' ? item.correctAnswer : 0),
-                             marks: item.m || item.marks || (Number(examForm.totalMarks) / parsed.length || 0)
-                          }));
+                  }} className="text-blue-600 font-bold text-xs hover:underline flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">content_copy</span>
+                    نسخ القالب
+                  </button>
+               </div>
 
-                          setExamForm(prev => ({ ...prev, questions: normalized }));
-                          toast.success(`تم استيراد ${normalized.length} سؤال بنجاح`);
-                       } catch (err: any) {
-                          toast.error('خطأ في تنسيق JSON: ' + err.message);
-                       }
-                    }} className="text-blue-600 font-black text-sm hover:underline">استيراد الأسئلة</button>
+               <div className="bg-[#1a202c] text-blue-400 p-6 rounded-[2rem] font-mono text-[11px] leading-relaxed relative overflow-hidden group border border-gray-800 shadow-2xl">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                      <span className="text-gray-400 uppercase tracking-widest font-black">Prompt Assistant</span>
+                    </div>
+                    <Badge variant="default" className="text-[9px] border-blue-900/50 text-blue-400/50">Fixed Format</Badge>
                   </div>
+                  <div className="space-y-1 opacity-90">
+                    <p className="text-gray-500">// استخدم هذا التنسيق لإنشاء الأسئلة عبر AI</p>
+                    <pre className="text-blue-300/80">
+{`[`} <br/>
+{`  {`} <br/>
+{`    "q": "نص السؤال هنا",`} <br/>
+{`    "o": ["اختيار 1", "اختيار 2", "اختيار 3", "اختيار 4"],`} <br/>
+{`    "c": 0, // الإجابة الصحيحة (0=أول اختيار، 1=ثاني اختيار...)`} <br/>
+{`    "m": 5  // درجة السؤال`} <br/>
+{`  }`} <br/>
+{`]`}
+                    </pre>
+                  </div>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none" />
                </div>
-               <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100/50 mb-2">
-                  <p className="text-[10px] font-bold text-blue-700 leading-relaxed">
-                     قم بلصق مصفوفة JSON تحتوي على الأسئلة.<br/>
-                     <code className="bg-white/50 px-2 rounded">"q"</code> للسؤال، 
-                     <code className="bg-white/50 px-2 rounded">"o"</code> للاختيارات، 
-                     <code className="bg-white/50 px-2 rounded">"c"</code> لمؤشر الإجابة (0، 1، 2، 3).
-                  </p>
+
+               <div className="space-y-4">
+                  <textarea 
+                    value={jsonPrompt} 
+                    onChange={e => setJsonPrompt(e.target.value)}
+                    placeholder='أضف كود الـ JSON هنا ثم اضغط على زر الاستيراد بالأسفل...'
+                    className="w-full h-40 bg-gray-50 rounded-[2rem] border-none focus:ring-4 focus:ring-blue-100 font-mono text-sm p-8 shadow-inner"
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="w-full h-16 rounded-2xl border-2 border-blue-100 text-blue-600 font-black text-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-3"
+                    onClick={() => {
+                        try {
+                           const parsed = JSON.parse(jsonPrompt);
+                           if (!Array.isArray(parsed)) throw new Error('يجب أن يكون JSON مصفوفة []');
+                           
+                           const normalized = parsed.map((item: any) => ({
+                              question: item.q || item.question || '',
+                              options: item.o || item.options || item.a || [],
+                              correctAnswer: typeof item.c !== 'undefined' ? item.c : (typeof item.correctAnswer !== 'undefined' ? item.correctAnswer : 0),
+                              marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / parsed.length) * 10) / 10 || 0))
+                           }));
+
+                           setExamForm(prev => ({ ...prev, questions: normalized }));
+                           toast.success(`تم استيراد ${normalized.length} سؤال بنجاح! راجع الأسئلة بالأسفل.`);
+                        } catch (err: any) {
+                           toast.error('خطأ في تنسيق JSON: ' + err.message);
+                        }
+                    }}
+                  >
+                    <span className="material-symbols-outlined">data_object</span>
+                    تحويل الكود إلى أسئلة الآن
+                  </Button>
                </div>
-               <textarea 
-                  value={jsonPrompt} 
-                  onChange={e => setJsonPrompt(e.target.value)}
-                  placeholder='[ { "q": "سؤال؟", "o": ["ج1", "ج2"], "c": 0, "m": 5 } ]'
-                  className="w-full h-40 bg-gray-50 rounded-[2rem] border-none focus:ring-4 focus:ring-blue-100 font-mono text-sm p-6"
-               />
             </div>
 
             {examForm.questions.length > 0 && (

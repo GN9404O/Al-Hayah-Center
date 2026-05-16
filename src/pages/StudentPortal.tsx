@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Grade, Schedule, Group, Teacher } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
 import { LogOut, Search, Clock, MapPin, Send, MessageSquare, AlertCircle, Facebook, Instagram, Twitter, Youtube, Phone, Info, Star, ShieldCheck, Mail, Share2, X, ChevronDown, Filter, Check } from 'lucide-react';
@@ -34,6 +34,7 @@ export function StudentPortal() {
   const [isTakingExam, setIsTakingExam] = useState(false);
   const [examAnswers, setExamAnswers] = useState<Record<number, number>>({});
   const [examStartTime, setExamStartTime] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [selectedTeacherProfile, setSelectedTeacherProfile] = useState<Teacher | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -139,7 +140,8 @@ export function StudentPortal() {
       query(collection(db, 'exams'), where('gradeId', '==', selectedGradeId)),
       (snapshot) => {
         setExams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'exams')
     );
 
     return () => {
@@ -174,6 +176,10 @@ export function StudentPortal() {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return days[new Date().getDay()];
   };
+
+  const todaySchedules = useMemo(() => {
+    return schedules.filter(s => s.day === getCurrentDay());
+  }, [schedules]);
 
   const formatTime12h = (time: string) => {
     if (!time) return '';
@@ -289,7 +295,64 @@ export function StudentPortal() {
     }
   };
 
-  const todaySchedules = schedules.filter(s => s.day === getCurrentDay());
+  // Exam timer logic
+  useEffect(() => {
+    if (!isTakingExam || !selectedExam || !timeLeft) return;
+
+    if (timeLeft <= 0) {
+      toast.error('انتهى وقت الاختبار!');
+      handleSubmitExam();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => (prev !== null ? prev - 1 : null));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isTakingExam, timeLeft]);
+
+  const formatTimeLeft = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h > 0 ? h + ':' : ''}${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+  };
+
+  const handleSubmitExam = async () => {
+    if (!selectedExam) return;
+
+    try {
+      // Calculate score
+      let score = 0;
+      const questions = selectedExam.questions || [];
+      questions.forEach((q: any, idx: number) => {
+        if (examAnswers[idx] === q.correctAnswer) {
+          score += Number(q.marks || 0);
+        }
+      });
+
+      const resultData = {
+        examId: selectedExam.id,
+        examTitle: selectedExam.title,
+        studentId: user?.uid,
+        studentName: user?.displayName,
+        score,
+        totalMarks: selectedExam.totalMarks,
+        answers: examAnswers,
+        completedAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, 'exam_results'), resultData);
+      
+      toast.success(`تم تسليم الاختبار بنجاح! درجتك: ${score}/${selectedExam.totalMarks}`);
+      setIsTakingExam(false);
+      setSelectedExam(null);
+      setTimeLeft(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'exam_results');
+    }
+  };
 
   if (loading || !isProfileLoaded || (selectedGradeId && !isDataInitialized)) {
     return (
@@ -1519,6 +1582,8 @@ export function StudentPortal() {
                       toast.success('تم التحقق بنجاح! جاري تحميل الاختبار...');
                       setExamStartTime(Date.now());
                       setExamAnswers({});
+                      const durationInSeconds = Number(selectedExam.duration || 60) * 60;
+                      setTimeLeft(durationInSeconds);
                       setIsTakingExam(true);
                       setAccessCodeInput('');
                     } else {
@@ -1539,41 +1604,35 @@ export function StudentPortal() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-white z-[200] overflow-y-auto" dir="rtl">
             <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
               <div className="max-w-4xl mx-auto px-6 h-20 flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black">
-                    <span className="material-symbols-outlined">timer</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "w-12 h-12 rounded-xl flex items-center justify-center font-black transition-colors",
+                      timeLeft && timeLeft < 300 ? "bg-red-50 text-red-600 animate-pulse" : "bg-blue-50 text-blue-600"
+                    )}>
+                      <span className="material-symbols-outlined">timer</span>
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-gray-900 leading-none">{selectedExam.title}</h2>
+                      <p className={cn(
+                        "text-xs font-black mt-1",
+                        timeLeft && timeLeft < 300 ? "text-red-500" : "text-blue-600"
+                      )}>
+                        الوقت المتبقي: {timeLeft !== null ? formatTimeLeft(timeLeft) : '--:--'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-black text-gray-900 leading-none">{selectedExam.title}</h2>
-                    <p className="text-[10px] text-gray-400 font-bold mt-1">تأكد من مراجعة إجاباتك قبل التسليم</p>
-                  </div>
-                </div>
-                <Button onClick={() => {
-                  if(confirm('هل أنت متأكد من إنهاء الاختبار وتسليم الإجابات؟')) {
-                    // Calculate score
-                    let score = 0;
-                    selectedExam.questions.forEach((q: any, idx: number) => {
-                      if (examAnswers[idx] === q.correctAnswer) {
-                        score += Number(q.marks);
+                  <Button 
+                    onClick={() => {
+                      if(confirm('هل أنت متأكد من إنهاء الاختبار وتسليم الإجابات؟')) {
+                        handleSubmitExam();
                       }
-                    });
-
-                    addDoc(collection(db, 'exam_results'), {
-                      examId: selectedExam.id,
-                      examTitle: selectedExam.title,
-                      studentId: user?.uid,
-                      studentName: user?.displayName,
-                      score,
-                      totalMarks: selectedExam.totalMarks,
-                      answers: examAnswers,
-                      completedAt: serverTimestamp(),
-                    }).then(() => {
-                      toast.success(`تم تسليم الاختبار بنجاح! درجتك: ${score}/${selectedExam.totalMarks}`);
-                      setIsTakingExam(false);
-                      setSelectedExam(null);
-                    });
-                  }
-                }} className="h-12 px-6 rounded-xl font-black bg-[#005bbf]">إنهاء وتسليم</Button>
+                    }} 
+                    className="h-12 px-8 rounded-2xl font-black bg-[#005bbf] shadow-xl shadow-blue-200"
+                  >
+                    إنهاء وتسليم
+                  </Button>
+                </div>
               </div>
             </header>
 

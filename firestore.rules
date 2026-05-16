@@ -95,26 +95,27 @@ service cloud.firestore {
     }
 
     function isValidExam(data) {
-      return data.keys().hasAll(['title', 'gradeId', 'date', 'duration', 'totalMarks', 'teacherId']) &&
+      return data.keys().hasAll(['title', 'gradeId', 'date', 'duration', 'totalMarks', 'questions', 'teacherId']) &&
              data.title is string && data.title.size() > 0 &&
              data.gradeId is string &&
              data.date is string &&
-             (data.duration is string || data.duration is int || data.duration is float) &&
-             (data.totalMarks is string || data.totalMarks is int || data.totalMarks is float) &&
-             data.teacherId is string &&
-             (!('accessCode' in data) || data.accessCode is string) &&
-             (!('questions' in data) || data.questions is list);
+             data.questions is list && data.questions.size() > 0 &&
+             data.teacherId is string;
     }
 
     function isTeacher() {
       return isSignedIn() && (
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'
-      ) || (
-        exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) // Fallback if record is in teachers collection
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'staff', 'admin']) ||
+        exists(/databases/$(database)/documents/teachers/$(request.auth.uid))
       );
     }
 
+    function isValidExamResult(data) {
+      return data.keys().hasAll(['examId', 'studentId', 'score', 'totalMarks']) &&
+             data.examId is string && data.studentId is string &&
+             data.score is number && (data.totalMarks is string || data.totalMarks is number);
+    }
     function isOwnerOfTeacherProfile(teacherId) {
       return isSignedIn() && 
              exists(/databases/$(database)/documents/teachers/$(teacherId)) &&
@@ -143,7 +144,6 @@ service cloud.firestore {
                     (isAdmin() && 
                      incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']))
                   );
-      allow delete: if false; 
     }
 
     // Grades collection
@@ -166,16 +166,14 @@ service cloud.firestore {
     match /exams/{examId} {
       allow read: if isSignedIn();
       allow create: if (isAdmin() || isTeacher()) && isValidExam(incoming());
-      allow update: if (isAdmin() || (isTeacher() && existing().teacherId == incoming().teacherId)) && isValidExam(incoming());
-      allow delete: if isAdmin() || (isTeacher() && exists(/databases/$(database)/documents/teachers/$(existing().teacherId)) && get(/databases/$(database)/documents/teachers/$(existing().teacherId)).data.userId == request.auth.uid);
+      allow update: if (isAdmin() || (isTeacher() && existing().teacherId == request.auth.uid)) && isValidExam(incoming());
+      allow delete: if isAdmin() || (isTeacher() && existing().teacherId == request.auth.uid);
     }
 
     // Groups collection
     match /groups/{groupId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidGroup(incoming()) && 
-                    (exists(/databases/$(database)/documents/grades/$(incoming().gradeId)) || isBuiltInGrade(incoming().gradeId)) &&
-                    exists(/databases/$(database)/documents/teachers/$(incoming().teacherId));
+      allow create: if isAdmin() && isValidGroup(incoming());
       allow update: if isAdmin() && isValidGroup(incoming());
       allow delete: if isAdmin();
     }
@@ -183,8 +181,7 @@ service cloud.firestore {
     // Schedules collection
     match /schedules/{scheduleId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidSchedule(incoming()) &&
-                    exists(/databases/$(database)/documents/groups/$(incoming().groupId));
+      allow create: if isAdmin() && isValidSchedule(incoming());
       allow update: if isAdmin() && isValidSchedule(incoming());
       allow delete: if isAdmin();
     }
@@ -197,14 +194,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Settings collection
+    // Exam Results collection
     match /exam_results/{resultId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.studentId == request.auth.uid || isAdmin() || isTeacher());
+      allow create: if isSignedIn() && incoming().studentId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
 
+    // Settings collection
     match /settings/{settingId} {
-      allow read: if true; // Publicly readable for login screen
+      allow read: if true;
       allow write: if isAdmin();
     }
   }
