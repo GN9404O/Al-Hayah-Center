@@ -731,29 +731,54 @@ export default function TeacherPortal() {
                      <span className="material-symbols-outlined text-blue-600">psychology</span>
                      إضافة الأسئلة (JSON Prompt)
                   </h4>
-                  <button type="button" onClick={() => {
-                     try {
-                        const parsed = JSON.parse(jsonPrompt);
-                        if (!Array.isArray(parsed)) throw new Error('يجب أن يكون JSON مصفوفة');
-                        
-                        const normalized = parsed.map((item: any) => ({
-                           question: item.q || item.question || '',
-                           options: item.o || item.options || item.a || [],
-                           correctAnswer: typeof item.c !== 'undefined' ? item.c : (typeof item.correctAnswer !== 'undefined' ? item.correctAnswer : 0),
-                           marks: item.m || item.marks || (Number(examForm.totalMarks) / parsed.length || 0)
-                        }));
+                  <div className="flex gap-4">
+                    <button type="button" onClick={() => {
+                        const template = `[
+  {
+    "q": "السؤال الأول يوضع هنا كلياً",
+    "o": ["الاختيار الأول", "الاختيار الثاني", "الاختيار الثالث", "الاختيار الرابع"],
+    "c": 0,
+    "m": 5
+  }
+]`;
+                        navigator.clipboard.writeText(template);
+                        toast.success('تم نسخ القالب إلى الحافظة');
+                    }} className="text-gray-400 font-bold text-xs hover:text-blue-600 flex items-center gap-1 border border-gray-200 px-3 py-1 rounded-xl transition-all">
+                      <span className="material-symbols-outlined text-sm">content_copy</span>
+                      نسخ القالب
+                    </button>
+                    <button type="button" onClick={() => {
+                       try {
+                          const parsed = JSON.parse(jsonPrompt);
+                          if (!Array.isArray(parsed)) throw new Error('يجب أن يكون JSON مصفوفة');
+                          
+                          const normalized = parsed.map((item: any) => ({
+                             question: item.q || item.question || '',
+                             options: item.o || item.options || item.a || [],
+                             correctAnswer: typeof item.c !== 'undefined' ? item.c : (typeof item.correctAnswer !== 'undefined' ? item.correctAnswer : 0),
+                             marks: item.m || item.marks || (Number(examForm.totalMarks) / parsed.length || 0)
+                          }));
 
-                        setExamForm(prev => ({ ...prev, questions: normalized }));
-                        toast.success(`تم استيراد ${normalized.length} سؤال بنجاح`);
-                     } catch (err: any) {
-                        toast.error('خطأ في تنسيق JSON: ' + err.message);
-                     }
-                  }} className="text-blue-600 font-black text-sm hover:underline">استيراد الأسئلة</button>
+                          setExamForm(prev => ({ ...prev, questions: normalized }));
+                          toast.success(`تم استيراد ${normalized.length} سؤال بنجاح`);
+                       } catch (err: any) {
+                          toast.error('خطأ في تنسيق JSON: ' + err.message);
+                       }
+                    }} className="text-blue-600 font-black text-sm hover:underline">استيراد الأسئلة</button>
+                  </div>
+               </div>
+               <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100/50 mb-2">
+                  <p className="text-[10px] font-bold text-blue-700 leading-relaxed">
+                     قم بلصق مصفوفة JSON تحتوي على الأسئلة.<br/>
+                     <code className="bg-white/50 px-2 rounded">"q"</code> للسؤال، 
+                     <code className="bg-white/50 px-2 rounded">"o"</code> للاختيارات، 
+                     <code className="bg-white/50 px-2 rounded">"c"</code> لمؤشر الإجابة (0، 1، 2، 3).
+                  </p>
                </div>
                <textarea 
                   value={jsonPrompt} 
                   onChange={e => setJsonPrompt(e.target.value)}
-                  placeholder='[ { "q": "سؤال؟", "o": ["ج1", "ج2"], "c": 0 } ]'
+                  placeholder='[ { "q": "سؤال؟", "o": ["ج1", "ج2"], "c": 0, "m": 5 } ]'
                   className="w-full h-40 bg-gray-50 rounded-[2rem] border-none focus:ring-4 focus:ring-blue-100 font-mono text-sm p-6"
                />
             </div>
