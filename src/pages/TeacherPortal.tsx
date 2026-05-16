@@ -7,9 +7,7 @@ import { Teacher, Grade, Student, Group, Schedule, AppSettings } from '../types'
 import { ACADEMIC_STAGES } from '../constants';
 import { Button, Input, Card, Badge, cn } from '../components/ui';
 import { Modal } from '../components/Modal';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { MathJax } from "better-react-mathjax";
 
 import { 
   Users, 
@@ -918,15 +916,9 @@ export default function TeacherPortal() {
                         <div className="flex items-start gap-4 flex-1">
                           <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{idx + 1}</div>
                           <div className="text-base font-bold text-gray-900 leading-relaxed overflow-x-auto py-1">
-                            <ReactMarkdown 
-                              remarkPlugins={[remarkMath]} 
-                              rehypePlugins={[rehypeKatex]}
-                              components={{
-                                p: ({ children }) => <span className="m-0 leading-relaxed">{children}</span>
-                              }}
-                            >
+                            <MathJax dynamic>
                               {q.question}
-                            </ReactMarkdown>
+                            </MathJax>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -975,15 +967,9 @@ export default function TeacherPortal() {
                               {q.correctAnswer === oIdx && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                             </div>
                             <div className="overflow-x-auto">
-                              <ReactMarkdown 
-                                remarkPlugins={[remarkMath]} 
-                                rehypePlugins={[rehypeKatex]}
-                                components={{
-                                  p: ({ children }) => <span className="m-0 leading-normal">{children}</span>
-                                }}
-                              >
+                              <MathJax dynamic>
                                 {opt}
-                              </ReactMarkdown>
+                              </MathJax>
                             </div>
                           </div>
                         ))}
