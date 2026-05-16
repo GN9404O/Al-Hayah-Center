@@ -120,6 +120,20 @@
       },
       "required": ["title", "gradeId", "date", "duration", "totalMarks", "teacherId"]
     },
+    "ExamResult": {
+      "title": "Exam Result",
+      "description": "Result of an exam taken by a student",
+      "type": "object",
+      "properties": {
+        "examId": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "score": { "type": "number" },
+        "totalMarks": { "type": "string" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      }
+    },
     "AppSettings": {
       "title": "App Settings",
       "description": "Global application configuration",
@@ -140,6 +154,10 @@
     "schedules": { "schema": "Schedule", "description": "Weekly schedule" },
     "students": { "schema": "Student", "description": "Students list" },
     "exams": { "schema": "Exam", "description": "Created exams" },
+    "exam_results": {
+      "schema": "ExamResult",
+      "description": "Student results for exams"
+    },
     "settings": { "schema": "AppSettings", "description": "Global settings" }
   }
 }

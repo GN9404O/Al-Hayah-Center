@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Grade, Schedule, Group, Teacher } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
@@ -31,6 +31,9 @@ export function StudentPortal() {
   const [activeTab, setActiveTab] = useState<'home' | 'schedule' | 'subjects' | 'exams' | 'account'>('home');
   const [exams, setExams] = useState<any[]>([]);
   const [selectedExam, setSelectedExam] = useState<any>(null);
+  const [isTakingExam, setIsTakingExam] = useState(false);
+  const [examAnswers, setExamAnswers] = useState<Record<number, number>>({});
+  const [examStartTime, setExamStartTime] = useState<number | null>(null);
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [selectedTeacherProfile, setSelectedTeacherProfile] = useState<Teacher | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -1489,7 +1492,7 @@ export function StudentPortal() {
       </footer>
       {/* Exam Access Modal */}
       <AnimatePresence>
-        {selectedExam && (
+        {selectedExam && !isTakingExam && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedExam(null)} className="fixed inset-0 bg-gray-900/60 backdrop-blur-xl z-[100]" />
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[3rem] p-10 z-[110] shadow-2xl" dir="rtl">
@@ -1514,8 +1517,9 @@ export function StudentPortal() {
                   <button onClick={() => {
                     if (accessCodeInput.trim().toUpperCase() === (selectedExam.accessCode || '').toUpperCase()) {
                       toast.success('تم التحقق بنجاح! جاري تحميل الاختبار...');
-                      // Logic to redirect or show quiz
-                      setSelectedExam(null);
+                      setExamStartTime(Date.now());
+                      setExamAnswers({});
+                      setIsTakingExam(true);
                       setAccessCodeInput('');
                     } else {
                       toast.error('رمز الدخول غير صحيح، يرجى التأكد وإعادة المحاولة');
@@ -1526,6 +1530,88 @@ export function StudentPortal() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Taking Exam View */}
+      <AnimatePresence>
+        {isTakingExam && selectedExam && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-white z-[200] overflow-y-auto" dir="rtl">
+            <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
+              <div className="max-w-4xl mx-auto px-6 h-20 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black">
+                    <span className="material-symbols-outlined">timer</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-gray-900 leading-none">{selectedExam.title}</h2>
+                    <p className="text-[10px] text-gray-400 font-bold mt-1">تأكد من مراجعة إجاباتك قبل التسليم</p>
+                  </div>
+                </div>
+                <Button onClick={() => {
+                  if(confirm('هل أنت متأكد من إنهاء الاختبار وتسليم الإجابات؟')) {
+                    // Calculate score
+                    let score = 0;
+                    selectedExam.questions.forEach((q: any, idx: number) => {
+                      if (examAnswers[idx] === q.correctAnswer) {
+                        score += Number(q.marks);
+                      }
+                    });
+
+                    addDoc(collection(db, 'exam_results'), {
+                      examId: selectedExam.id,
+                      examTitle: selectedExam.title,
+                      studentId: user?.uid,
+                      studentName: user?.displayName,
+                      score,
+                      totalMarks: selectedExam.totalMarks,
+                      answers: examAnswers,
+                      completedAt: serverTimestamp(),
+                    }).then(() => {
+                      toast.success(`تم تسليم الاختبار بنجاح! درجتك: ${score}/${selectedExam.totalMarks}`);
+                      setIsTakingExam(false);
+                      setSelectedExam(null);
+                    });
+                  }
+                }} className="h-12 px-6 rounded-xl font-black bg-[#005bbf]">إنهاء وتسليم</Button>
+              </div>
+            </header>
+
+            <main className="max-w-3xl mx-auto px-6 py-10 pb-32">
+              <div className="space-y-12">
+                {selectedExam.questions && selectedExam.questions.map((q: any, qIdx: number) => (
+                  <div key={qIdx} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex gap-4">
+                      <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{qIdx + 1}</div>
+                      <p className="text-xl font-black text-gray-900 leading-relaxed">{q.question}</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 pr-12">
+                      {q.options.map((opt: string, oIdx: number) => (
+                        <button 
+                          key={oIdx} 
+                          onClick={() => setExamAnswers({ ...examAnswers, [qIdx]: oIdx })}
+                          className={cn(
+                            "group flex items-center gap-4 p-5 rounded-2xl text-right transition-all border-2",
+                            examAnswers[qIdx] === oIdx 
+                              ? "bg-blue-50/50 border-[#005bbf] text-[#005bbf]" 
+                              : "bg-white border-transparent hover:bg-gray-50 text-gray-600"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                            examAnswers[qIdx] === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-200"
+                          )}>
+                            {examAnswers[qIdx] === oIdx && <div className="w-2 h-2 rounded-full bg-white" />}
+                          </div>
+                          <span className="font-bold text-lg">{opt}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </main>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
