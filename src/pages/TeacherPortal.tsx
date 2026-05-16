@@ -10,7 +10,7 @@ import { Modal } from '../components/Modal';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+
 import { 
   Users, 
   BookOpen, 
@@ -784,9 +784,10 @@ export default function TeacherPortal() {
             <div className="space-y-6 pt-6 border-t border-gray-50">
                <div className="flex items-center justify-between">
                   <h4 className="text-xl font-black text-gray-900 flex items-center gap-3">
-                     <span className="material-symbols-outlined text-blue-600">psychology</span>
-                     إضافة الأسئلة (JSON)
+                     <span className="material-symbols-outlined text-blue-600">smart_toy</span>
+                     توليد الأسئلة بالذكاء الاصطناعي
                   </h4>
+                  <p className="text-xs font-bold text-gray-500 pr-12 -mt-4 mb-4">انسخ "تعليمات الـ AI" بالأسفل وأعطها لـ (Gemini/ChatGPT) لتحصل على الأسئلة جاهزة:</p>
                   <button type="button" onClick={() => {
                         const template = `[
   {
@@ -813,7 +814,7 @@ export default function TeacherPortal() {
                     <Badge variant="default" className="text-[9px] border-blue-900/50 text-blue-400/50">Fixed Format</Badge>
                   </div>
                   <div className="space-y-1 opacity-90">
-                    <p className="text-gray-500 font-bold">// استخدم LaTeX للرياضيات (الكسور، المدى، النهايات...)</p>
+                    <p className="text-gray-500 font-bold">// استخدم LaTeX بوضع الرموز بين $$ للحصول على كسور احترافية</p>
                     <pre className="text-blue-300/80 text-[10px] sm:text-xs bg-black/20 p-4 rounded-xl overflow-x-auto">
 {`[`} <br/>
 {`  {`} <br/>
@@ -826,6 +827,28 @@ export default function TeacherPortal() {
                     </pre>
                   </div>
                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none" />
+               </div>
+
+               <div className="flex gap-4">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="flex-1 h-12 rounded-xl border-blue-100 text-blue-600 font-bold text-sm hover:bg-blue-50 gap-2"
+                    onClick={() => {
+                        const instructions = `أنت معلم خبير في إنشاء الاختبارات. قم بإنشاء مجموعة من الأسئلة في ملف JSON.
+يجب أن تتبع القواعد التالية:
+1. استخدم LaTeX لكافة الرموز والكسور والعمليات الرياضية.
+2. استخدم علامات الدولار المزدوجة $$ للكسور والنهايات لتظهر بشكل احترافي عمودي.
+3. التنسيق المطلوب: [{"q": "نص السؤال", "o": ["أ", "ب", "ج", "د"], "c": 0, "m": 5}]
+4. اللعبة باللغة العربية.
+مثال لسؤال بكسر: "أوجد ناتج $$ \\frac{x^2-6x}{x^2+x-12} $$"`;
+                        navigator.clipboard.writeText(instructions);
+                        toast.success('تم نسخ تعليمات الذكاء الاصطناعي');
+                    }}
+                  >
+                    <span className="material-symbols-outlined text-xl">smart_toy</span>
+                    نسخ تعليمات الـ AI
+                  </Button>
                </div>
 
                <div className="space-y-4">

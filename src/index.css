@@ -14,3 +14,24 @@
     scrollbar-width: none;
   }
 }
+
+/* Force LTR for Math equations even in RTL layout */
+.katex {
+  direction: ltr !important;
+  display: inline-block;
+}
+
+.katex-display {
+  direction: ltr !important;
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-html {
+  direction: ltr !important;
+}
+
+mjx-container {
+  direction: ltr !important;
+}
