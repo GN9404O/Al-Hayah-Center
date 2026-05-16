@@ -813,14 +813,14 @@ export default function TeacherPortal() {
                     <Badge variant="default" className="text-[9px] border-blue-900/50 text-blue-400/50">Fixed Format</Badge>
                   </div>
                   <div className="space-y-1 opacity-90">
-                    <p className="text-gray-500">// استخدم هذا التنسيق لإنشاء الأسئلة عبر AI (يدعم المعادلات الرياضية)</p>
-                    <pre className="text-blue-300/80">
+                    <p className="text-gray-500 font-bold">// استخدم LaTeX للرياضيات (الكسور، المدى، النهايات...)</p>
+                    <pre className="text-blue-300/80 text-[10px] sm:text-xs bg-black/20 p-4 rounded-xl overflow-x-auto">
 {`[`} <br/>
 {`  {`} <br/>
-{`    "q": "أوجد ناتج: $x^2 + 5x + 6 = 0$",`} <br/>
-{`    "o": ["$x = -2$", "$x = 3$", "5", "0"],`} <br/>
-{`    "c": 0, // رقم الإجابة الصحيحة (0=الأولى)`} <br/>
-{`    "m": 5  // درجة السؤال`} <br/>
+{`    "q": "أوجد قيمة النهاية: $$\\lim_{x \\to 2} \\frac{x^2 - 6x}{x^2 + x - 12}$$",`} <br/>
+{`    "o": ["$$\\frac{5}{7}$$", "$$\\frac{1}{7}$$", "$$-1$$", "$$-5$$"],`} <br/>
+{`    "c": 0,`} <br/>
+{`    "m": 5`} <br/>
 {`  }`} <br/>
 {`]`}
                     </pre>
@@ -884,7 +884,13 @@ export default function TeacherPortal() {
                         <div className="flex items-start gap-4 flex-1">
                           <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{idx + 1}</div>
                           <div className="text-base font-bold text-gray-900 leading-relaxed overflow-x-auto py-1">
-                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                            <ReactMarkdown 
+                              remarkPlugins={[remarkMath]} 
+                              rehypePlugins={[rehypeKatex]}
+                              components={{
+                                p: ({ children }) => <span className="m-0 leading-relaxed">{children}</span>
+                              }}
+                            >
                               {q.question}
                             </ReactMarkdown>
                           </div>
@@ -935,7 +941,13 @@ export default function TeacherPortal() {
                               {q.correctAnswer === oIdx && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                             </div>
                             <div className="overflow-x-auto">
-                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkMath]} 
+                                rehypePlugins={[rehypeKatex]}
+                                components={{
+                                  p: ({ children }) => <span className="m-0 leading-normal">{children}</span>
+                                }}
+                              >
                                 {opt}
                               </ReactMarkdown>
                             </div>
