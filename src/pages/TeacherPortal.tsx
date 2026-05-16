@@ -169,17 +169,30 @@ export default function TeacherPortal() {
       // Auto-import if prompt is filled but questions are empty
       if (finalQuestions.length === 0 && jsonPrompt.trim()) {
         try {
-          const parsed = JSON.parse(jsonPrompt);
-          if (Array.isArray(parsed)) {
-            finalQuestions = parsed.map((item: any) => ({
-              question: item.q || item.question || '',
-              options: item.o || item.options || item.a || [],
-              correctAnswer: typeof item.c !== 'undefined' ? item.c : (typeof item.correctAnswer !== 'undefined' ? item.correctAnswer : 0),
-              marks: item.m || item.marks || (Number(examForm.totalMarks) / parsed.length || 0)
-            }));
+          let parsed;
+          try {
+            parsed = JSON.parse(jsonPrompt);
+          } catch (e) {
+            // Try to fix common JSON errors (like missing quotes or wrong quotes) if possible, or just re-throw
+            throw new Error('تنسيق الـ JSON غير صحيح. تأكد من استخدام علامات الاقتباس المزدوجة " وليس المفردة \'.');
           }
-        } catch (e) {
-          console.error("Failed to auto-parse questions", e);
+
+          // Support both array and object with questions key
+          const items = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.qs || []);
+          
+          if (!Array.isArray(items) || items.length === 0) {
+            throw new Error('لم يتم العثور على مصفوفة أسئلة في الـ JSON المدخل.');
+          }
+
+          finalQuestions = items.map((item: any) => ({
+            question: item.q || item.question || '',
+            options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
+            correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
+            marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
+          }));
+        } catch (err: any) {
+          toast.error(`حدث خطأ أثناء قراءة الـ JSON تلقائياً: ${err.message}`);
+          return; // Stop saving if auto-parse was intended but failed
         }
       }
 
@@ -824,14 +837,24 @@ export default function TeacherPortal() {
                     className="w-full h-16 rounded-2xl border-2 border-blue-100 text-blue-600 font-black text-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-3"
                     onClick={() => {
                         try {
-                           const parsed = JSON.parse(jsonPrompt);
-                           if (!Array.isArray(parsed)) throw new Error('يجب أن يكون JSON مصفوفة []');
+                           let parsed;
+                           try {
+                             parsed = JSON.parse(jsonPrompt);
+                           } catch (e) {
+                             throw new Error('تنسيق الـ JSON غير صحيح. تأكد من استخدام علامات الاقتباس المزدوجة " وليس المفردة \'.');
+                           }
+
+                           const items = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.qs || []);
                            
-                           const normalized = parsed.map((item: any) => ({
+                           if (!Array.isArray(items) || items.length === 0) {
+                             throw new Error('لم يتم العثور على مصفوفة أسئلة في الـ JSON المدخل.');
+                           }
+
+                           const normalized = items.map((item: any) => ({
                               question: item.q || item.question || '',
-                              options: item.o || item.options || item.a || [],
-                              correctAnswer: typeof item.c !== 'undefined' ? item.c : (typeof item.correctAnswer !== 'undefined' ? item.correctAnswer : 0),
-                              marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / parsed.length) * 10) / 10 || 0))
+                              options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
+                              correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
+                              marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
                            }));
 
                            setExamForm(prev => ({ ...prev, questions: normalized }));
@@ -847,9 +870,9 @@ export default function TeacherPortal() {
                </div>
             </div>
 
-            {examForm.questions.length > 0 && (
+            {examForm.questions.length > 0 ? (
               <div className="space-y-4">
-                <h5 className="font-black text-gray-900 text-sm">مراجعة الأسئلة وتعديل الدرجات</h5>
+                <h5 className="font-black text-gray-900 text-sm">مراجعة الأسئلة وتعديل الدرجات ({examForm.questions.length})</h5>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                   {examForm.questions.map((q, idx) => (
                     <div key={idx} className="bg-white border border-gray-100 p-4 rounded-2xl flex items-center justify-between gap-4">
@@ -880,6 +903,16 @@ export default function TeacherPortal() {
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-100 p-8 rounded-[2rem] text-center space-y-3">
+                 <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+                    <span className="material-symbols-outlined">warning</span>
+                 </div>
+                 <div>
+                    <p className="text-amber-800 font-black">الاختبار فارغ حالياً</p>
+                    <p className="text-xs text-amber-600 font-bold">يجب عليك الضغط على زر "تحويل الكود إلى أسئلة الآن" بعد لصق الـ JSON لتتمكن من حفظ الاختبار.</p>
+                 </div>
               </div>
             )}
 
