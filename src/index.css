@@ -16,6 +16,13 @@
 }
 
 /* Force LTR for Math equations even in RTL layout */
+.math-wrapper {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  display: inline-block;
+  vertical-align: middle;
+}
+
 .katex {
   direction: ltr !important;
   display: inline-block;
@@ -34,6 +41,7 @@
 
 mjx-container {
   direction: ltr !important;
+  unicode-bidi: isolate !important;
   display: inline-block !important;
 }
 

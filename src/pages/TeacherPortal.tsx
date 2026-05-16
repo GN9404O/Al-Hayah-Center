@@ -837,10 +837,11 @@ export default function TeacherPortal() {
 الأساسيات:
 1. استخرج الأسئلة والخيارات الأربعة لكل سؤال.
 2. استخدم لغة LaTeX لكافة المعادلات، الرموز، الكسور، والجذور.
-3. هام جداً: استخدم علامة الدولار المزدوجة $$ قبل وبعد أي كسر أو رمز رياضي ليظهر بشكل عمودي منسق واحترافي.
-4. التنسيق هو JSON ARRAY (قائمة).
-5. حدد رقم الإجابة الصحيحة في الحقل "c" (0 للأول، 1 للثاني...).
-6. ضع الدرجة الافتراضية 5 في "m".
+3. هام جداً: لا تضع نصاً عربياً داخل علامات الدولار $$. ضع النص العربي قبلها أو بعدها.
+4. هام جداً: استخدم علامة الدولار المزدوجة $$ قبل وبعد أي كسر أو رمز رياضي ليظهر بشكل عمودي منسق واحترافي.
+5. التنسيق هو JSON ARRAY (قائمة).
+6. حدد رقم الإجابة الصحيحة في الحقل "c" (0 للأول، 1 للثاني...).
+7. ضع الدرجة الافتراضية 5 في "m".
 
 مثال للتنسيق المطلوب:
 [
@@ -916,9 +917,11 @@ export default function TeacherPortal() {
                         <div className="flex items-start gap-4 flex-1">
                           <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{idx + 1}</div>
                           <div className="text-base font-bold text-gray-900 leading-relaxed overflow-x-auto py-1">
-                            <MathJax dynamic>
-                              {q.question}
-                            </MathJax>
+                            <span className="math-wrapper">
+                              <MathJax dynamic>
+                                {q.question}
+                              </MathJax>
+                            </span>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -967,9 +970,11 @@ export default function TeacherPortal() {
                               {q.correctAnswer === oIdx && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                             </div>
                             <div className="overflow-x-auto">
-                              <MathJax dynamic>
-                                {opt}
-                              </MathJax>
+                              <span className="math-wrapper">
+                                <MathJax dynamic>
+                                  {opt}
+                                </MathJax>
+                              </span>
                             </div>
                           </div>
                         ))}
