@@ -71,8 +71,11 @@ export default function TeacherPortal() {
     date: '',
     duration: '',
     totalMarks: '',
-    description: ''
+    description: '',
+    accessCode: '',
+    questions: [] as any[],
   });
+  const [jsonPrompt, setJsonPrompt] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -166,7 +169,8 @@ export default function TeacherPortal() {
         await addDoc(collection(db, 'exams'), { ...examForm, teacherId: teacher.id, teacherName: teacher.name, subject: teacher.subject, createdAt: serverTimestamp() });
       }
       setIsExamModalOpen(false);
-      setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '' });
+      setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '', accessCode: '', questions: [] });
+      setJsonPrompt('');
       setCurrentExam(null);
       toast.success('تم الحفظ بنجاح');
     } catch {
@@ -461,7 +465,12 @@ export default function TeacherPortal() {
                   <h2 className="text-3xl font-black text-gray-900 mb-2">إدارة الاختبارات</h2>
                   <p className="text-gray-400 font-bold text-lg">قم بإنشاء ومتابعة اختبارات طلابك</p>
                 </div>
-                <Button onClick={() => { setIsExamModalOpen(true); setCurrentExam(null); setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '' }); }} className="h-16 px-10 rounded-2xl gap-3 text-xl font-black shadow-2xl shadow-blue-200">
+                <Button onClick={() => { 
+                  setIsExamModalOpen(true); 
+                  setCurrentExam(null); 
+                  setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '', accessCode: '', questions: [] }); 
+                  setJsonPrompt('');
+                }} className="h-16 px-10 rounded-2xl gap-3 text-xl font-black shadow-2xl shadow-blue-200">
                   <span className="material-symbols-outlined">add_circle</span>
                   إضافة اختبار
                 </Button>
@@ -480,7 +489,21 @@ export default function TeacherPortal() {
                           <span className="material-symbols-outlined text-3xl">quiz</span>
                        </div>
                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => { setCurrentExam(exam); setExamForm({ title: exam.title, gradeId: exam.gradeId, date: exam.date, duration: exam.duration, totalMarks: exam.totalMarks, description: exam.description || '' }); setIsExamModalOpen(true); }} className="w-10 h-10 bg-gray-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all">
+                          <button onClick={() => { 
+                              setCurrentExam(exam); 
+                              setExamForm({ 
+                                 title: exam.title, 
+                                 gradeId: exam.gradeId, 
+                                 date: exam.date, 
+                                 duration: exam.duration, 
+                                 totalMarks: exam.totalMarks, 
+                                 description: exam.description || '',
+                                 accessCode: exam.accessCode || '',
+                                 questions: exam.questions || []
+                              }); 
+                              setJsonPrompt('');
+                              setIsExamModalOpen(true); 
+                           }} className="w-10 h-10 bg-gray-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all">
                              <span className="material-symbols-outlined text-xl">edit</span>
                           </button>
                           <button onClick={async () => { if(confirm('هل أنت متأكد من حذف هذا الاختبار؟')) await deleteDoc(doc(db, 'exams', exam.id)); }} className="w-10 h-10 bg-gray-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">
@@ -685,10 +708,92 @@ export default function TeacherPortal() {
                </div>
                <Input label="موعد الاختبار" type="date" value={examForm.date} onChange={e => setExamForm({ ...examForm, date: e.target.value })} required />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                <Input label="زمن الاختبار (ق)" type="number" value={examForm.duration} onChange={e => setExamForm({ ...examForm, duration: e.target.value })} required />
-               <Input label="الدرجة الكلية" type="number" value={examForm.totalMarks} onChange={e => setExamForm({ ...examForm, totalMarks: e.target.value })} required />
+               <Input label="الدرجة الكلية" type="number" value={examForm.totalMarks} onChange={e => {
+                  const val = e.target.value;
+                  setExamForm(prev => {
+                    const newTotal = Number(val);
+                    const qCount = prev.questions.length;
+                    if (qCount > 0) {
+                      const marksPerQ = Math.round((newTotal / qCount) * 10) / 10;
+                      return { ...prev, totalMarks: val, questions: prev.questions.map(q => ({ ...q, marks: marksPerQ })) };
+                    }
+                    return { ...prev, totalMarks: val };
+                  });
+               }} required />
+               <Input label="رمز دخول الاختبار" value={examForm.accessCode} onChange={e => setExamForm({ ...examForm, accessCode: e.target.value })} required placeholder="مثال: CHEM2026" />
             </div>
+
+            <div className="space-y-4 pt-6 border-t border-gray-50">
+               <div className="flex items-center justify-between">
+                  <h4 className="text-xl font-black text-gray-900 flex items-center gap-3">
+                     <span className="material-symbols-outlined text-blue-600">psychology</span>
+                     إضافة الأسئلة (JSON Prompt)
+                  </h4>
+                  <button type="button" onClick={() => {
+                     try {
+                        const parsed = JSON.parse(jsonPrompt);
+                        if (!Array.isArray(parsed)) throw new Error('يجب أن يكون JSON مصفوفة');
+                        
+                        const normalized = parsed.map((item: any) => ({
+                           question: item.q || item.question || '',
+                           options: item.o || item.options || item.a || [],
+                           correctAnswer: typeof item.c !== 'undefined' ? item.c : (typeof item.correctAnswer !== 'undefined' ? item.correctAnswer : 0),
+                           marks: item.m || item.marks || (Number(examForm.totalMarks) / parsed.length || 0)
+                        }));
+
+                        setExamForm(prev => ({ ...prev, questions: normalized }));
+                        toast.success(`تم استيراد ${normalized.length} سؤال بنجاح`);
+                     } catch (err: any) {
+                        toast.error('خطأ في تنسيق JSON: ' + err.message);
+                     }
+                  }} className="text-blue-600 font-black text-sm hover:underline">استيراد الأسئلة</button>
+               </div>
+               <textarea 
+                  value={jsonPrompt} 
+                  onChange={e => setJsonPrompt(e.target.value)}
+                  placeholder='[ { "q": "سؤال؟", "o": ["ج1", "ج2"], "c": 0 } ]'
+                  className="w-full h-40 bg-gray-50 rounded-[2rem] border-none focus:ring-4 focus:ring-blue-100 font-mono text-sm p-6"
+               />
+            </div>
+
+            {examForm.questions.length > 0 && (
+              <div className="space-y-4">
+                <h5 className="font-black text-gray-900 text-sm">مراجعة الأسئلة وتعديل الدرجات</h5>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                  {examForm.questions.map((q, idx) => (
+                    <div key={idx} className="bg-white border border-gray-100 p-4 rounded-2xl flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate">{idx + 1}. {q.question}</p>
+                        <p className="text-[10px] text-gray-400 font-bold">{q.options?.length} اختيارات</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-gray-400">الدرجة:</span>
+                        <input 
+                          type="number" 
+                          value={q.marks} 
+                          onChange={e => {
+                            const newMarks = Number(e.target.value);
+                            const updated = [...examForm.questions];
+                            updated[idx] = { ...updated[idx], marks: newMarks };
+                            setExamForm({ ...examForm, questions: updated });
+                          }}
+                          className="w-16 h-10 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-600 text-center font-black text-sm"
+                        />
+                      </div>
+                      <button type="button" onClick={() => {
+                        const updated = examForm.questions.filter((_, i) => i !== idx);
+                        setExamForm({ ...examForm, questions: updated });
+                      }} className="text-red-400 hover:text-red-600">
+                        <span className="material-symbols-outlined text-xl">delete</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-4 pt-10 border-t border-gray-50 flex-col sm:flex-row">
                <Button type="submit" className="flex-1 h-16 rounded-[1.5rem] font-black text-xl shadow-2xl shadow-blue-200">اعتماد وحفظ</Button>
                <Button type="button" variant="outline" onClick={() => setIsExamModalOpen(false)} className="flex-1 h-16 rounded-[1.5rem] font-black text-xl border-2">إلغاء</Button>

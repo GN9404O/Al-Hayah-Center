@@ -29,6 +29,9 @@ export function StudentPortal() {
   const [loading, setLoading] = useState(true);
   const [isDataInitialized, setIsDataInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'schedule' | 'subjects' | 'exams' | 'account'>('home');
+  const [exams, setExams] = useState<any[]>([]);
+  const [selectedExam, setSelectedExam] = useState<any>(null);
+  const [accessCodeInput, setAccessCodeInput] = useState('');
   const [selectedTeacherProfile, setSelectedTeacherProfile] = useState<Teacher | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -129,9 +132,17 @@ export function StudentPortal() {
       }
     );
 
+    const unsubExams = onSnapshot(
+      query(collection(db, 'exams'), where('gradeId', '==', selectedGradeId)),
+      (snapshot) => {
+        setExams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }
+    );
+
     return () => {
       unsubSchedules();
       unsubGroups();
+      unsubExams();
     };
   }, [selectedGradeId, isProfileLoaded]);
 
@@ -1139,28 +1150,47 @@ export function StudentPortal() {
               {/* Exams Tab */}
               {activeTab === 'exams' && (
                 <div className="flex flex-col gap-8">
-                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
-                    <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-600 mb-6 font-bold">
-                       <span className="material-symbols-outlined text-4xl">quiz</span>
+                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-4 mb-8">
+                       <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-600">
+                          <span className="material-symbols-outlined text-3xl">quiz</span>
+                       </div>
+                       <div>
+                          <h3 className="text-2xl font-bold text-gray-900">الاختبارات والتقييمات</h3>
+                          <p className="text-gray-500 text-sm">استعد لاختباراتك القادمة وتابع نتائجك.</p>
+                       </div>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">الاختبارات والتقييمات</h3>
-                    <p className="text-gray-500 max-w-md mx-auto">هنا ستجد اختباراتك القادمة، نتائج الامتحانات، والتقارير الشهرية لمتابعة مستواك الدراسي.</p>
-                    
-                    <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-right">
-                      <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                        <div className="flex items-center gap-3 mb-2 text-blue-600">
-                          <span className="material-symbols-outlined">assignment</span>
-                          <span className="font-bold text-sm">الاختبارات القادمة</span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {exams.length === 0 ? (
+                        <div className="col-span-full py-20 flex flex-col items-center justify-center text-gray-300">
+                          <span className="material-symbols-outlined text-6xl mb-4 opacity-20">assignment_late</span>
+                          <p className="font-bold opacity-40">لا توجد اختبارات متاحة حالياً لصفك الدراسي.</p>
                         </div>
-                        <p className="text-xs text-gray-400">لا توجد اختبارات مجدولة حالياً لمادتك المختارة.</p>
-                      </div>
-                      <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                        <div className="flex items-center gap-3 mb-2 text-green-600">
-                          <span className="material-symbols-outlined">analytics</span>
-                          <span className="font-bold text-sm">نتائج الاختبارات</span>
-                        </div>
-                        <p className="text-xs text-gray-400">سيتم عرض نتائج اختباراتك الشهرية فور تصحيحها هنا.</p>
-                      </div>
+                      ) : (
+                        exams.map(exam => (
+                          <div key={exam.id} className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl flex flex-col hover:bg-white hover:shadow-xl transition-all group">
+                             <div className="flex justify-between items-start mb-6">
+                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                                   <span className="material-symbols-outlined">description</span>
+                                </div>
+                                <span className="text-[10px] font-black text-gray-400 uppercase bg-white px-3 py-1 rounded-full">{exam.duration} دقيقة</span>
+                             </div>
+                             <h4 className="text-lg font-bold text-gray-900 mb-2 truncate">{exam.title}</h4>
+                             <p className="text-xs text-gray-400 font-bold mb-6 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">person</span>
+                                {exam.teacherName}
+                             </p>
+                             
+                             <button
+                               onClick={() => setSelectedExam(exam)}
+                               className="mt-auto h-12 rounded-2xl bg-white border border-blue-100 text-[#005bbf] text-sm font-black hover:bg-[#005bbf] hover:text-white transition-all shadow-sm"
+                             >
+                               دخول الاختبار
+                             </button>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1457,6 +1487,47 @@ export function StudentPortal() {
           <button className="text-xs text-[#005bbf]">الدعم الفني</button>
         </div>
       </footer>
+      {/* Exam Access Modal */}
+      <AnimatePresence>
+        {selectedExam && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedExam(null)} className="fixed inset-0 bg-gray-900/60 backdrop-blur-xl z-[100]" />
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[3rem] p-10 z-[110] shadow-2xl" dir="rtl">
+              <div className="text-center mb-8">
+                 <div className="w-20 h-20 bg-blue-50 rounded-[2rem] flex items-center justify-center text-blue-600 mx-auto mb-6 shadow-xl shadow-blue-50/50">
+                    <span className="material-symbols-outlined text-4xl">lock</span>
+                 </div>
+                 <h3 className="text-2xl font-black text-gray-900 mb-2">رمز دخول الاختبار</h3>
+                 <p className="text-gray-400 font-bold text-sm">يرجى إدخال الرمز السري الذي حصلت عليه من المعلم للدخول لاختبار: <br/><span className="text-blue-600">{selectedExam.title}</span></p>
+              </div>
+
+              <div className="space-y-6">
+                <input 
+                  type="text"
+                  value={accessCodeInput}
+                  onChange={e => setAccessCodeInput(e.target.value)}
+                  placeholder="أدخل رمز الدخول هنا..."
+                  className="w-full h-16 bg-gray-50 rounded-2xl border-none px-8 font-black text-center text-xl tracking-widest focus:ring-4 focus:ring-blue-100 uppercase"
+                />
+                
+                <div className="flex gap-4">
+                  <button onClick={() => {
+                    if (accessCodeInput.trim().toUpperCase() === (selectedExam.accessCode || '').toUpperCase()) {
+                      toast.success('تم التحقق بنجاح! جاري تحميل الاختبار...');
+                      // Logic to redirect or show quiz
+                      setSelectedExam(null);
+                      setAccessCodeInput('');
+                    } else {
+                      toast.error('رمز الدخول غير صحيح، يرجى التأكد وإعادة المحاولة');
+                    }
+                  }} className="flex-1 h-14 bg-[#005bbf] text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-200">دخول الاختبار</button>
+                  <button onClick={() => setSelectedExam(null)} className="flex-1 h-14 bg-gray-50 text-gray-500 rounded-2xl font-black text-sm">إلغاء</button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   </div>
 );
