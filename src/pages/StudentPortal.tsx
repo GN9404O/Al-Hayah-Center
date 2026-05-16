@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
-import { cn } from '../components/ui';
+import { Button, Card, Badge, Input, cn } from '../components/ui';
 
 import { updateProfile } from 'firebase/auth';
 
@@ -1579,36 +1579,44 @@ export function StudentPortal() {
 
             <main className="max-w-3xl mx-auto px-6 py-10 pb-32">
               <div className="space-y-12">
-                {selectedExam.questions && selectedExam.questions.map((q: any, qIdx: number) => (
-                  <div key={qIdx} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex gap-4">
-                      <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{qIdx + 1}</div>
-                      <p className="text-xl font-black text-gray-900 leading-relaxed">{q.question}</p>
+                {selectedExam.questions && selectedExam.questions.length > 0 ? (
+                  selectedExam.questions.map((q: any, qIdx: number) => (
+                    <div key={qIdx} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{qIdx + 1}</div>
+                        <p className="text-xl font-black text-gray-900 leading-relaxed">{q.question}</p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 pr-12">
+                        {q.options.map((opt: string, oIdx: number) => (
+                          <button 
+                            key={oIdx} 
+                            onClick={() => setExamAnswers({ ...examAnswers, [qIdx]: oIdx })}
+                            className={cn(
+                              "group flex items-center gap-4 p-5 rounded-2xl text-right transition-all border-2",
+                              examAnswers[qIdx] === oIdx 
+                                ? "bg-blue-50/50 border-[#005bbf] text-[#005bbf]" 
+                                : "bg-white border-transparent hover:bg-gray-50 text-gray-600"
+                            )}
+                          >
+                            <div className={cn(
+                              "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                              examAnswers[qIdx] === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-200"
+                            )}>
+                              {examAnswers[qIdx] === oIdx && <div className="w-2 h-2 rounded-full bg-white" />}
+                            </div>
+                            <span className="font-bold text-lg">{opt}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 pr-12">
-                      {q.options.map((opt: string, oIdx: number) => (
-                        <button 
-                          key={oIdx} 
-                          onClick={() => setExamAnswers({ ...examAnswers, [qIdx]: oIdx })}
-                          className={cn(
-                            "group flex items-center gap-4 p-5 rounded-2xl text-right transition-all border-2",
-                            examAnswers[qIdx] === oIdx 
-                              ? "bg-blue-50/50 border-[#005bbf] text-[#005bbf]" 
-                              : "bg-white border-transparent hover:bg-gray-50 text-gray-600"
-                          )}
-                        >
-                          <div className={cn(
-                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                            examAnswers[qIdx] === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-200"
-                          )}>
-                            {examAnswers[qIdx] === oIdx && <div className="w-2 h-2 rounded-full bg-white" />}
-                          </div>
-                          <span className="font-bold text-lg">{opt}</span>
-                        </button>
-                      ))}
-                    </div>
+                  ))
+                ) : (
+                  <div className="py-20 text-center space-y-4">
+                    <span className="material-symbols-outlined text-6xl text-gray-200">error</span>
+                    <p className="text-gray-500 font-bold">عذراً، هذا الاختبار لا يحتوي على أسئلة حالياً.</p>
+                    <Button onClick={() => setIsTakingExam(false)} variant="outline">العودة للخلف</Button>
                   </div>
-                ))}
+                )}
               </div>
             </main>
           </motion.div>
