@@ -163,17 +163,32 @@ export default function TeacherPortal() {
     e.preventDefault();
     if (!teacher) return;
     try {
+      const examData = {
+        title: examForm.title || '',
+        gradeId: examForm.gradeId || '',
+        date: examForm.date || '',
+        duration: examForm.duration || '',
+        totalMarks: examForm.totalMarks || '',
+        description: examForm.description || '',
+        accessCode: examForm.accessCode || '',
+        questions: examForm.questions || [],
+        teacherId: teacher.id,
+        teacherName: teacher.name || 'معلم',
+        subject: teacher.subject || 'مادة',
+      };
+
       if (currentExam) {
-        await updateDoc(doc(db, 'exams', currentExam.id), { ...examForm, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, 'exams', currentExam.id), { ...examData, updatedAt: serverTimestamp() });
       } else {
-        await addDoc(collection(db, 'exams'), { ...examForm, teacherId: teacher.id, teacherName: teacher.name, subject: teacher.subject, createdAt: serverTimestamp() });
+        await addDoc(collection(db, 'exams'), { ...examData, createdAt: serverTimestamp() });
       }
       setIsExamModalOpen(false);
       setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '', accessCode: '', questions: [] });
       setJsonPrompt('');
       setCurrentExam(null);
       toast.success('تم الحفظ بنجاح');
-    } catch {
+    } catch (error) {
+      console.error('Error saving exam:', error);
       toast.error('حدث خطأ أثناء الحفظ');
     }
   };

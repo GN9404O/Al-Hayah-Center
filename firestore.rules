@@ -96,18 +96,22 @@ service cloud.firestore {
 
     function isValidExam(data) {
       return data.keys().hasAll(['title', 'gradeId', 'date', 'duration', 'totalMarks', 'teacherId']) &&
-             data.title is string &&
+             data.title is string && data.title.size() > 0 &&
              data.gradeId is string &&
              data.date is string &&
-             (data.duration is string || data.duration is int) &&
-             (data.totalMarks is string || data.totalMarks is int) &&
-             data.teacherId is string;
+             (data.duration is string || data.duration is int || data.duration is float) &&
+             (data.totalMarks is string || data.totalMarks is int || data.totalMarks is float) &&
+             data.teacherId is string &&
+             (!('accessCode' in data) || data.accessCode is string) &&
+             (!('questions' in data) || data.questions is list);
     }
 
     function isTeacher() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'
+      ) || (
+        exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) // Fallback if record is in teachers collection
       );
     }
 

@@ -98,6 +98,28 @@
       },
       "required": ["name", "phone", "gradeId"]
     },
+    "Exam": {
+      "title": "Exam",
+      "description": "Exam data with questions and access code",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "gradeId": { "type": "string" },
+        "date": { "type": "string" },
+        "duration": { "type": "string" },
+        "totalMarks": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "subject": { "type": "string" },
+        "accessCode": { "type": "string" },
+        "questions": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "gradeId", "date", "duration", "totalMarks", "teacherId"]
+    },
     "AppSettings": {
       "title": "App Settings",
       "description": "Global application configuration",
@@ -117,6 +139,7 @@
     "groups": { "schema": "Group", "description": "Study groups" },
     "schedules": { "schema": "Schedule", "description": "Weekly schedule" },
     "students": { "schema": "Student", "description": "Students list" },
+    "exams": { "schema": "Exam", "description": "Created exams" },
     "settings": { "schema": "AppSettings", "description": "Global settings" }
   }
 }
