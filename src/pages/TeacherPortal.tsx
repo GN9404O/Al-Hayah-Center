@@ -7,6 +7,10 @@ import { Teacher, Grade, Student, Group, Schedule, AppSettings } from '../types'
 import { ACADEMIC_STAGES } from '../constants';
 import { Button, Input, Card, Badge, cn } from '../components/ui';
 import { Modal } from '../components/Modal';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { 
   Users, 
   BookOpen, 
@@ -809,13 +813,13 @@ export default function TeacherPortal() {
                     <Badge variant="default" className="text-[9px] border-blue-900/50 text-blue-400/50">Fixed Format</Badge>
                   </div>
                   <div className="space-y-1 opacity-90">
-                    <p className="text-gray-500">// استخدم هذا التنسيق لإنشاء الأسئلة عبر AI</p>
+                    <p className="text-gray-500">// استخدم هذا التنسيق لإنشاء الأسئلة عبر AI (يدعم المعادلات الرياضية)</p>
                     <pre className="text-blue-300/80">
 {`[`} <br/>
 {`  {`} <br/>
-{`    "q": "نص السؤال هنا",`} <br/>
-{`    "o": ["اختيار 1", "اختيار 2", "اختيار 3", "اختيار 4"],`} <br/>
-{`    "c": 0, // الإجابة الصحيحة (0=أول اختيار، 1=ثاني اختيار...)`} <br/>
+{`    "q": "أوجد ناتج: $x^2 + 5x + 6 = 0$",`} <br/>
+{`    "o": ["$x = -2$", "$x = 3$", "5", "0"],`} <br/>
+{`    "c": 0, // رقم الإجابة الصحيحة (0=الأولى)`} <br/>
 {`    "m": 5  // درجة السؤال`} <br/>
 {`  }`} <br/>
 {`]`}
@@ -873,33 +877,71 @@ export default function TeacherPortal() {
             {examForm.questions.length > 0 ? (
               <div className="space-y-4">
                 <h5 className="font-black text-gray-900 text-sm">مراجعة الأسئلة وتعديل الدرجات ({examForm.questions.length})</h5>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-blue-200">
                   {examForm.questions.map((q, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 p-4 rounded-2xl flex items-center justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm truncate">{idx + 1}. {q.question}</p>
-                        <p className="text-[10px] text-gray-400 font-bold">{q.options?.length} اختيارات</p>
+                    <div key={idx} className="bg-white border border-gray-100 p-6 rounded-[2rem] space-y-4 shadow-sm hover:border-blue-200 transition-all">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{idx + 1}</div>
+                          <div className="text-base font-bold text-gray-900 leading-relaxed overflow-x-auto py-1">
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                              {q.question}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center bg-gray-50 rounded-xl px-3 py-1 border border-gray-100">
+                             <span className="text-[10px] font-black text-gray-400 ml-2">الدرجة:</span>
+                             <input 
+                               type="number" 
+                               value={q.marks} 
+                               onChange={e => {
+                                 const newMarks = Number(e.target.value);
+                                 const updated = [...examForm.questions];
+                                 updated[idx] = { ...updated[idx], marks: newMarks };
+                                 setExamForm({ ...examForm, questions: updated });
+                               }}
+                               className="w-12 h-8 bg-transparent border-none text-center font-black text-sm text-blue-600 focus:ring-0"
+                             />
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const updated = examForm.questions.filter((_, i) => i !== idx);
+                              setExamForm({ ...examForm, questions: updated });
+                            }} 
+                            className="w-10 h-10 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-xl flex items-center justify-center transition-all"
+                          >
+                            <span className="material-symbols-outlined text-xl">delete</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-gray-400">الدرجة:</span>
-                        <input 
-                          type="number" 
-                          value={q.marks} 
-                          onChange={e => {
-                            const newMarks = Number(e.target.value);
-                            const updated = [...examForm.questions];
-                            updated[idx] = { ...updated[idx], marks: newMarks };
-                            setExamForm({ ...examForm, questions: updated });
-                          }}
-                          className="w-16 h-10 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-600 text-center font-black text-sm"
-                        />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mr-12">
+                        {(q.options || []).map((opt: string, oIdx: number) => (
+                          <div 
+                            key={oIdx} 
+                            className={cn(
+                              "p-3 rounded-xl border text-sm font-bold transition-all flex items-center gap-3",
+                              q.correctAnswer === oIdx 
+                                ? "bg-blue-50 border-blue-200 text-[#005bbf]" 
+                                : "bg-gray-50 border-gray-100 text-gray-600"
+                            )}
+                          >
+                            <div className={cn(
+                              "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0",
+                              q.correctAnswer === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-300"
+                            )}>
+                              {q.correctAnswer === oIdx && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <div className="overflow-x-auto">
+                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                {opt}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <button type="button" onClick={() => {
-                        const updated = examForm.questions.filter((_, i) => i !== idx);
-                        setExamForm({ ...examForm, questions: updated });
-                      }} className="text-red-400 hover:text-red-600">
-                        <span className="material-symbols-outlined text-xl">delete</span>
-                      </button>
                     </div>
                   ))}
                 </div>

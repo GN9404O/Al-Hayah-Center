@@ -9,6 +9,10 @@ import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 import { Button, Card, Badge, Input, cn } from '../components/ui';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 import { updateProfile } from 'firebase/auth';
 
@@ -1660,12 +1664,16 @@ export function StudentPortal() {
                   
                   if (questions && questions.length > 0) {
                     return questions.map((q: any, qIdx: number) => (
-                      <div key={qIdx} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex gap-4">
-                          <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{qIdx + 1}</div>
-                          <p className="text-xl font-black text-gray-900 leading-relaxed">{q.question}</p>
+                      <div key={qIdx} className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-[0_10px_50px_-15px_rgba(0,0,0,0.05)] border border-gray-100 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:border-blue-100 transition-colors">
+                        <div className="flex gap-6 items-start">
+                          <div className="w-12 h-12 rounded-2xl bg-gray-900 text-white flex items-center justify-center font-black text-xl shrink-0 shadow-lg shadow-gray-200">{qIdx + 1}</div>
+                          <div className="text-2xl font-black text-gray-900 leading-relaxed overflow-x-auto py-2 scrollbar-none flex-1">
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                              {q.question}
+                            </ReactMarkdown>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 gap-3 pr-12">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {(q.options || []).map((opt: string, oIdx: number) => (
                             <button 
                               key={oIdx} 
@@ -1678,12 +1686,16 @@ export function StudentPortal() {
                               )}
                             >
                               <div className={cn(
-                                "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                                "w-10 h-10 rounded-full border-4 flex items-center justify-center transition-all shrink-0",
                                 examAnswers[qIdx] === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-200"
                               )}>
-                                {examAnswers[qIdx] === oIdx && <div className="w-2 h-2 rounded-full bg-white" />}
+                                {examAnswers[qIdx] === oIdx && <div className="w-2.5 h-2.5 rounded-full bg-white shadow-sm" />}
                               </div>
-                              <span className="font-bold text-lg">{opt}</span>
+                              <div className="font-bold text-lg overflow-x-auto py-1 scrollbar-none flex-1">
+                                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                  {opt}
+                                </ReactMarkdown>
+                              </div>
                             </button>
                           ))}
                         </div>
