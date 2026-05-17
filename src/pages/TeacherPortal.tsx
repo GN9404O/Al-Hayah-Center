@@ -990,6 +990,14 @@ const TeacherPortal = () => {
           </div>
         )}
         </main>
+        {/* Footer Design Header Match */}
+        <footer className="hidden lg:flex flex-col items-center max-w-7xl mx-auto py-16 px-10 border-t border-gray-100 pb-32">
+           <div className="flex items-center gap-4 opacity-40 mb-6 group cursor-default">
+              <div className="w-10 h-10 bg-gray-900 rounded-xl group-hover:bg-[#005bbf] transition-colors"></div>
+              <span className="font-black text-xl text-gray-900">{settings?.systemName || 'إديو سنتر'}</span>
+           </div>
+           <p className="text-sm font-bold text-gray-400">© 2026 جميع الحقوق محفوظة لـ إديو سنتر. تم التصميم بكل فخر.</p>
+        </footer>
       {/* End main content area */}
       </div>
 
@@ -1056,15 +1064,6 @@ const TeacherPortal = () => {
            );
          })}
       </nav>
-
-      {/* Footer Design Header Match */}
-      <footer className="hidden lg:flex flex-col items-center max-w-7xl mx-auto py-16 px-10 border-t border-gray-100 pb-32">
-         <div className="flex items-center gap-4 opacity-40 mb-6 group cursor-default">
-            <div className="w-10 h-10 bg-gray-900 rounded-xl group-hover:bg-[#005bbf] transition-colors"></div>
-            <span className="font-black text-xl text-gray-900">{settings?.systemName || 'إديو سنتر'}</span>
-         </div>
-         <p className="text-sm font-bold text-gray-400">© 2026 جميع الحقوق محفوظة لـ إديو سنتر. تم التصميم بكل فخر.</p>
-      </footer>
     </>
   )}
 </div>
