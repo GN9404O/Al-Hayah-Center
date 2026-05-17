@@ -455,7 +455,6 @@ export function Teachers() {
               placeholder="https://i.ibb.co/..."
               value={formData.photoURL}
               onChange={(e) => setFormData({ ...formData, photoURL: e.target.value })}
-              icon={<ImageIcon className="w-4 h-4" />}
             />
           </div>
 

@@ -1670,6 +1670,11 @@ export function StudentPortal() {
                                 {q.question}
                               </MathJax>
                             </span>
+                            {q.image && (
+                              <div className="mt-6 rounded-3xl overflow-hidden border border-gray-100 shadow-sm max-w-full">
+                                <img src={q.image} alt="Question" className="w-full h-auto object-contain bg-white mx-auto max-h-[400px]" />
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

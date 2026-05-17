@@ -32,7 +32,7 @@ import toast from 'react-hot-toast';
 
 type Tab = 'home' | 'exams' | 'students' | 'profile';
 
-export default function TeacherPortal() {
+const TeacherPortal = () => {
   const { user, logout } = useAuth();
   const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState<Tab>('home');
@@ -66,6 +66,7 @@ export default function TeacherPortal() {
   // Exams state
   const [exams, setExams] = useState<any[]>([]);
   const [isExamModalOpen, setIsExamModalOpen] = useState(false);
+  const [isExamEditorActive, setIsExamEditorActive] = useState(false);
   const [currentExam, setCurrentExam] = useState<any>(null);
   const [examForm, setExamForm] = useState({
     title: '',
@@ -188,6 +189,7 @@ export default function TeacherPortal() {
 
           finalQuestions = items.map((item: any) => ({
             question: item.q || item.question || '',
+            image: item.i || item.img || item.image || null,
             options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
             correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
             marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
@@ -253,65 +255,383 @@ export default function TeacherPortal() {
 
   return (
     <div className="min-h-screen bg-[#f7f9ff] font-sans rtl text-right flex flex-col lg:flex-row" dir="rtl">
-      {/* 1. Desktop Sidebar (Persistent) */}
-      <aside className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col sticky top-0 h-screen z-50">
-        <div className="p-8 flex items-center gap-4 border-b border-gray-50 bg-[#005bbf]">
-          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white font-black text-2xl border border-white/30 backdrop-blur-md">
-            {teacher?.name?.charAt(0)}
-          </div>
-          <div>
-            <h1 className="text-lg font-black text-white leading-none mb-1">{settings?.systemName || 'إديو سنتر'}</h1>
-            <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest leading-none">بوابة المعلم</p>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-6 space-y-3 mt-4">
-          {[
-            { id: 'home', label: 'لوحة التحكم', icon: 'space_dashboard' },
-            { id: 'students', label: 'طلابي', icon: 'group' },
-            { id: 'exams', label: 'الاختبارات', icon: 'grading' },
-            { id: 'profile', label: 'الملف الشخصي', icon: 'person_outline' }
-          ].map(item => (
-            <button key={item.id} onClick={() => setActiveTab(item.id as Tab)} className={cn("w-full h-14 flex items-center gap-4 px-6 rounded-2xl font-black text-sm transition-all", activeTab === item.id ? "bg-blue-50 text-[#005bbf] shadow-sm" : "hover:bg-gray-50 text-gray-500")}>
-              <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: activeTab === item.id ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="p-6 border-t border-gray-50">
-          <button onClick={logout} className="w-full h-14 flex items-center gap-4 px-6 rounded-2xl text-red-500 font-black text-sm hover:bg-red-50 transition-all">
-            <span className="material-symbols-outlined text-2xl">logout</span>
-            <span>خروج آمن</span>
-          </button>
-        </div>
-      </aside>
-
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* 2. Header */}
-        <header className="bg-[#005bbf] shadow-md sticky top-0 z-40">
-          <div className="flex justify-between items-center px-6 md:px-10 w-full h-16 max-w-7xl mx-auto">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden text-white hover:bg-white/10 transition-colors p-2 rounded-xl">
-                <span className="material-symbols-outlined text-2xl">menu</span>
+      {isExamEditorActive ? (
+        <div className="flex-1 bg-[#f8fafc] min-h-screen overflow-y-auto">
+          {/* Full Screen Header */}
+          <header className="h-20 bg-white border-b border-gray-100 sticky top-0 z-[60] px-6 md:px-10 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-5">
+              <button 
+                onClick={() => setIsExamEditorActive(false)}
+                className="w-12 h-12 rounded-2xl hover:bg-red-50 hover:text-red-500 flex items-center justify-center text-gray-400 transition-all border border-transparent hover:border-red-100"
+              >
+                <span className="material-symbols-outlined text-2xl">close</span>
               </button>
-              <h1 className="text-lg md:text-xl font-bold text-white leading-none tracking-tight lg:hidden">{settings?.systemName || 'إديو سنتر'}</h1>
-              <div className="hidden lg:block text-white/80 font-bold text-sm">
-                {activeTab === 'home' && 'الرئيسية'}
-                {activeTab === 'students' && 'إدارة الطلاب'}
-                {activeTab === 'exams' && 'مركز الاختبارات'}
-                {activeTab === 'profile' && 'الملف الشخصي'}
+              <div className="h-10 w-[2px] bg-gray-100 mx-2" />
+              <div>
+                <h2 className="text-xl font-black text-gray-900 leading-none">
+                  {currentExam ? 'تعديل الاختبار' : 'إضافة اختبار جديد'}
+                </h2>
+                <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest mt-1.5 flex items-center gap-1">
+                   <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                   بيئة العمل الذكية
+                </p>
               </div>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden border border-white/30 backdrop-blur-md">
-              {teacher?.photoURL ? (
-                <img src={teacher.photoURL} alt="User" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-black text-sm">{teacher?.name?.charAt(0)}</div>
-              )}
+            
+            <div className="flex gap-4">
+               <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsExamEditorActive(false)}
+                className="h-12 px-8 rounded-xl font-black border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
+               >
+                 إلغاء التغييرات
+               </Button>
+               <Button 
+                onClick={handleCreateExam}
+                className="h-12 px-10 rounded-xl font-black shadow-xl shadow-blue-200 bg-[#005bbf] hover:bg-blue-700"
+               >
+                 {currentExam ? 'تحديث الاختبار' : 'نشر الاختبار الآن'}
+               </Button>
             </div>
-          </div>
-        </header>
+          </header>
+
+          <main className="max-w-5xl mx-auto py-16 px-6 pb-32">
+            <div className="space-y-12">
+               {/* 1. Base Info */}
+               <Card className="p-10 rounded-[3rem] border-none shadow-[0_20px_50px_-20px_rgba(0,0,0,0.05)] bg-white relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110" />
+                  <div className="relative z-10 space-y-8">
+                    <div className="flex items-center gap-4 border-r-4 border-blue-600 pr-6">
+                      <h3 className="text-2xl font-black text-gray-900">المعلومات الأساسية</h3>
+                    </div>
+                    
+                    <Input 
+                      label="عنوان الاختبار الفني" 
+                      value={examForm.title} 
+                      onChange={e => setExamForm({ ...examForm, title: e.target.value })} 
+                      className="h-16 rounded-2xl text-lg font-bold border-gray-100 bg-gray-50/50"
+                      required 
+                      placeholder="مثال: مراجعة الوحدة الأولى كيمياء" 
+                    />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="space-y-1">
+                          <label className="text-xs font-black text-gray-400 mr-6 mb-2 block uppercase tracking-widest">الصف الدراسي المستهدف</label>
+                          <select className="w-full h-16 bg-gray-50/50 rounded-2xl border border-gray-100 focus:ring-4 focus:ring-blue-100 font-bold px-8 text-gray-700 appearance-none transition-all" value={examForm.gradeId} onChange={e => setExamForm({ ...examForm, gradeId: e.target.value })} required>
+                              <option value="">اختر الصف من القائمة...</option>
+                              {teacher?.gradeIds.map(gid => (
+                                <option key={gid} value={gid}>{getGradeName(gid)}</option>
+                              ))}
+                          </select>
+                      </div>
+                      <Input label="موعد الاختبار" type="date" value={examForm.date} onChange={e => setExamForm({ ...examForm, date: e.target.value })} className="h-16 rounded-2xl font-bold bg-gray-50/50 border-gray-100" required />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <Input label="زمن الاختبار (ق)" type="number" value={examForm.duration} onChange={e => setExamForm({ ...examForm, duration: e.target.value })} className="h-16 rounded-2xl font-bold bg-gray-50/50 border-gray-100" required />
+                      <Input label="الدرجة الكلية" type="number" value={examForm.totalMarks} onChange={e => {
+                          const val = e.target.value;
+                          setExamForm(prev => {
+                            const newTotal = Number(val);
+                            const qCount = prev.questions.length;
+                            if (qCount > 0) {
+                              const marksPerQ = Math.round((newTotal / qCount) * 10) / 10;
+                              return { ...prev, totalMarks: val, questions: prev.questions.map(q => ({ ...q, marks: marksPerQ })) };
+                            }
+                            return { ...prev, totalMarks: val };
+                          });
+                      }} className="h-16 rounded-2xl font-bold bg-gray-50/50 border-gray-100" required />
+                      <Input label="رمز دخول الاختبار" value={examForm.accessCode} onChange={e => setExamForm({ ...examForm, accessCode: e.target.value })} className="h-16 rounded-2xl font-bold bg-gray-50/50 border-gray-100" required placeholder="CHEM2026" />
+                    </div>
+                  </div>
+               </Card>
+
+               {/* 2. AI Importer */}
+               <Card className="p-10 rounded-[3rem] border-none shadow-[0_20px_50px_-20px_rgba(0,0,0,0.05)] bg-white space-y-8">
+                  <div className="flex items-center justify-between border-r-4 border-blue-600 pr-6">
+                    <h3 className="text-2xl font-black text-gray-900">توليد الأسئلة بالذكاء الاصطناعي</h3>
+                  </div>
+
+                  <div className="bg-[#0f172a] p-10 rounded-[3rem] font-mono text-[11px] leading-relaxed relative overflow-hidden group border border-gray-800 shadow-2xl">
+                    <div className="flex justify-between items-center mb-8">
+                      <div className="flex items-center gap-4">
+                        <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+                        <span className="text-gray-400 uppercase tracking-widest font-black text-xs">AI Workspace Control</span>
+                      </div>
+                      <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/10 rounded-full text-blue-400 border border-blue-500/20 text-[10px] font-black">
+                         SYSTEM STATUS: READY
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="flex gap-4">
+                        <Button 
+                          type="button" 
+                          className="flex-1 h-14 rounded-2xl bg-[#3b82f6] hover:bg-blue-600 text-white font-black flex items-center justify-center gap-3 shadow-xl shadow-blue-900/30 transition-all active:scale-95"
+                          onClick={() => {
+                              const instructions = `سأرسل لك صورة لاختبار أو مجموعة أسئلة. وظيفتك هي تحويلها إلى ملف JSON بدقة عالية جداً.
+الأساسيات:
+1. استخرج الأسئلة والخيارات الأربعة لكل سؤال.
+2. استخدم لغة LaTeX لكافة المعادلات، الرموز، الكسور، والجذور.
+3. هام جداً: لا تضع نصاً عربياً داخل علامات الدولار $$. ضع النص العربي قبلها أو بعدها.
+4. هام جداً: استخدم علامة الدولار المزدوجة $$ قبل وبعد أي كسر أو رمز رياضي ليظهر بشكل عمودي منسق واحترافي.
+5. المواد العلمية (فيزياء، أحياء..): إذا وجد رسم أو رمز معقد، ضعه في حقل "i" كرابط صورة (مثلاً من imgbb).
+6. التنسيق هو JSON ARRAY (قائمة).
+7. حدد رقم الإجابة الصحيحة في الحقل "c" (0 للأول، 1 للثاني...).
+8. ضع الدرجة الافتراضية 5 في "m".
+
+مثال للتنسيق المطلوب:
+[
+  {
+    "q": "أوجد قيمة النهاية: $$ \\lim_{x \\to 2} \\frac{x^2 - 6x}{x^2+x-12} $$",
+    "o": ["$$ \\frac{5}{7} $$", "$$ \\frac{1}{7} $$", "-1", "-5"],
+    "c": 0,
+    "m": 5,
+    "i": "https://i.ibb.co/..."
+  }
+]`;
+                              navigator.clipboard.writeText(instructions);
+                              toast.success('تم نسخ التعليمات.. أرسلها الآن للـ AI مع صورة الامتحان');
+                          }}
+                        >
+                          <span className="material-symbols-outlined text-2xl">content_copy</span>
+                          نسخ "تعليمات الـ AI"
+                        </Button>
+                      </div>
+
+                      <div className="relative">
+                        <textarea 
+                          value={jsonPrompt} 
+                          onChange={e => setJsonPrompt(e.target.value)}
+                          placeholder='ألصق كود الـ JSON هنا للبدء بالبناء الفوري...'
+                          className="w-full h-80 bg-black/40 rounded-[2.5rem] border border-white/5 font-mono text-sm p-10 text-blue-300 placeholder:text-gray-700 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none resize-none"
+                        />
+                        <div className="absolute bottom-6 left-6 text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                           Paste standard JSON array
+                        </div>
+                      </div>
+
+                      <Button 
+                        type="button" 
+                        onClick={() => {
+                          try {
+                            let parsed;
+                            try {
+                              parsed = JSON.parse(jsonPrompt);
+                            } catch (e) {
+                              throw new Error('تنسيق الـ JSON غير صحيح. تأكد من استخدام علامات الاقتباس المزدوجة " وليس المفردة \'.');
+                            }
+
+                            const items = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.qs || []);
+                            
+                            if (!Array.isArray(items) || items.length === 0) {
+                              throw new Error('لم يتم العثور على مصفوفة أسئلة في الـ JSON المدخل.');
+                            }
+
+                            const normalized = items.map((item: any) => ({
+                                question: item.q || item.question || '',
+                                image: item.i || item.img || item.image || null,
+                                options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
+                                correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
+                                marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
+                            }));
+
+                            setExamForm(prev => ({ ...prev, questions: normalized }));
+                            toast.success(`تم بنجاح! تم استيراد ${normalized.length} سؤال.`);
+                          } catch (err: any) {
+                            toast.error('خطأ في استيراد البيانات: ' + err.message);
+                          }
+                        }}
+                        className="w-full h-18 rounded-[1.75rem] bg-white text-[#0f172a] hover:bg-gray-100 font-black text-xl flex items-center justify-center gap-4 transition-all shadow-2xl group"
+                      >
+                        <span className="material-symbols-outlined text-3xl group-hover:rotate-180 transition-transform duration-700">automation</span>
+                        بناء قائمة الأسئلة فوراً
+                      </Button>
+                    </div>
+
+                    <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/5 rounded-full -mr-40 -mt-40 blur-[100px] pointer-events-none" />
+                  </div>
+               </Card>
+
+               {/* 3. Questions List */}
+               {examForm.questions.length > 0 && (
+                 <div className="space-y-8">
+                    <div className="flex items-center justify-between px-10">
+                      <h3 className="text-2xl font-black text-gray-900 flex items-center gap-4">
+                        <div className="w-10 h-10 bg-[#005bbf] rounded-xl flex items-center justify-center text-white">
+                          <span className="material-symbols-outlined font-black">fact_check</span>
+                        </div>
+                        مراجعة الأسئلة ({examForm.questions.length})
+                      </h3>
+                      <button 
+                        type="button"
+                        onClick={() => setExamForm(prev => ({ ...prev, questions: [] }))}
+                        className="text-red-500 font-black text-sm flex items-center gap-2 hover:bg-red-50 px-4 py-2 rounded-xl transition-all"
+                      >
+                         <span className="material-symbols-outlined text-lg">delete_sweep</span>
+                         مسح كافة الأسئلة
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-10">
+                       {examForm.questions.map((q, idx) => (
+                         <div key={idx} className="bg-white p-10 rounded-[3.5rem] shadow-[0_15px_60px_-20px_rgba(0,0,0,0.06)] border border-gray-50 space-y-8 hover:shadow-2xl transition-all group overflow-hidden relative">
+                            <div className="absolute top-0 right-0 w-2 h-full bg-[#005bbf] opacity-0 group-hover:opacity-100 transition-opacity" />
+                            
+                            <div className="flex flex-col md:flex-row items-start justify-between gap-8">
+                               <div className="flex items-start gap-8 flex-1">
+                                  <div className="w-14 h-14 rounded-[1.5rem] bg-gray-900 text-white flex items-center justify-center font-black text-2xl shrink-0 mt-1 shadow-xl">
+                                    {idx + 1}
+                                  </div>
+                                  <div className="flex-1 space-y-6 min-w-0">
+                                     {q.image && (
+                                       <div className="rounded-[2.5rem] overflow-hidden border-4 border-gray-50 max-w-lg bg-white shadow-inner">
+                                          <img src={q.image} alt="Question" className="w-full h-auto object-contain max-h-[350px]" />
+                                       </div>
+                                     )}
+                                     <div className="text-2xl font-bold text-gray-900 leading-relaxed break-words">
+                                        <span className="math-wrapper">
+                                          <MathJax dynamic>{q.question}</MathJax>
+                                        </span>
+                                     </div>
+                                  </div>
+                               </div>
+                               
+                               <div className="flex items-center gap-3 shrink-0 self-end md:self-start">
+                                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col items-center">
+                                     <span className="text-[9px] font-black text-gray-400 uppercase mb-1">الدرجة</span>
+                                     <input 
+                                        type="number" 
+                                        value={q.marks} 
+                                        onChange={e => {
+                                          const newMarks = Number(e.target.value);
+                                          const updated = [...examForm.questions];
+                                          updated[idx] = { ...updated[idx], marks: newMarks };
+                                          setExamForm({ ...examForm, questions: updated });
+                                        }}
+                                        className="w-12 bg-transparent border-none text-center font-black text-xl text-blue-600 focus:ring-0 p-0"
+                                     />
+                                  </div>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = examForm.questions.filter((_, i) => i !== idx);
+                                      setExamForm({ ...examForm, questions: updated });
+                                    }}
+                                    className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm border border-red-100"
+                                  >
+                                    <span className="material-symbols-outlined text-2xl">delete</span>
+                                  </button>
+                               </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mr-22">
+                               {(q.options || []).map((opt: string, oIdx: number) => (
+                                 <div 
+                                    key={oIdx}
+                                    className={cn(
+                                       "p-6 rounded-2xl border-2 font-bold transition-all flex items-center gap-5 cursor-pointer",
+                                       q.correctAnswer === oIdx 
+                                          ? "bg-blue-50 border-blue-600 text-[#005bbf] shadow-lg shadow-blue-100" 
+                                          : "bg-white border-gray-50 text-gray-400 hover:border-gray-200"
+                                    )}
+                                    onClick={() => {
+                                      const updated = [...examForm.questions];
+                                      updated[idx] = { ...updated[idx], correctAnswer: oIdx };
+                                      setExamForm({ ...examForm, questions: updated });
+                                    }}
+                                 >
+                                    <div className={cn(
+                                       "w-8 h-8 rounded-xl border-2 flex items-center justify-center shrink-0 transition-transform group-active:scale-90",
+                                       q.correctAnswer === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-100"
+                                    )}>
+                                       {q.correctAnswer === oIdx && <span className="material-symbols-outlined text-white text-lg">check</span>}
+                                    </div>
+                                    <span className="math-wrapper text-lg">
+                                      <MathJax dynamic>{opt}</MathJax>
+                                    </span>
+                                 </div>
+                               ))}
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+
+                    <div className="pt-20">
+                       <Button 
+                         onClick={handleCreateExam}
+                         className="w-full h-24 rounded-[3rem] font-black text-3xl shadow-[0_30px_60px_-20px_rgba(0,91,191,0.3)] bg-[#005bbf] transition-all hover:scale-[1.02] active:scale-95"
+                       >
+                         {currentExam ? 'تحديث وتعديل الاختبار' : 'اعتماد ونشر الاختبار النهائي'}
+                       </Button>
+                    </div>
+                 </div>
+               )}
+            </div>
+          </main>
+        </div>
+      ) : (
+        <>
+          {/* 1. Desktop Sidebar (Persistent) */}
+          <aside className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col sticky top-0 h-screen z-50">
+            <div className="p-8 flex items-center gap-4 border-b border-gray-50 bg-[#005bbf]">
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white font-black text-2xl border border-white/30 backdrop-blur-md">
+                {teacher?.name?.charAt(0)}
+              </div>
+              <div>
+                <h1 className="text-lg font-black text-white leading-none mb-1">{settings?.systemName || 'إديو سنتر'}</h1>
+                <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest leading-none">بوابة المعلم</p>
+              </div>
+            </div>
+
+            <nav className="flex-1 p-6 space-y-3 mt-4">
+              {[
+                { id: 'home', label: 'لوحة التحكم', icon: 'space_dashboard' },
+                { id: 'students', label: 'طلابي', icon: 'group' },
+                { id: 'exams', label: 'الاختبارات', icon: 'grading' },
+                { id: 'profile', label: 'الملف الشخصي', icon: 'person_outline' }
+              ].map(item => (
+                <button key={item.id} onClick={() => setActiveTab(item.id as Tab)} className={cn("w-full h-14 flex items-center gap-4 px-6 rounded-2xl font-black text-sm transition-all", activeTab === item.id ? "bg-blue-50 text-[#005bbf] shadow-sm" : "hover:bg-gray-50 text-gray-500")}>
+                  <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: activeTab === item.id ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="p-6 border-t border-gray-50">
+              <button onClick={logout} className="w-full h-14 flex items-center gap-4 px-6 rounded-2xl text-red-500 font-black text-sm hover:bg-red-50 transition-all">
+                <span className="material-symbols-outlined text-2xl">logout</span>
+                <span>خروج آمن</span>
+              </button>
+            </div>
+          </aside>
+
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* 2. Header */}
+            <header className="bg-[#005bbf] shadow-md sticky top-0 z-40">
+              <div className="flex justify-between items-center px-6 md:px-10 w-full h-16 max-w-7xl mx-auto">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden text-white hover:bg-white/10 transition-colors p-2 rounded-xl">
+                    <span className="material-symbols-outlined text-2xl">menu</span>
+                  </button>
+                  <h1 className="text-lg md:text-xl font-bold text-white leading-none tracking-tight lg:hidden">{settings?.systemName || 'إديو سنتر'}</h1>
+                  <div className="hidden lg:block text-white/80 font-bold text-sm">
+                    {activeTab === 'home' && 'الرئيسية'}
+                    {activeTab === 'students' && 'إدارة الطلاب'}
+                    {activeTab === 'exams' && 'مركز الاختبارات'}
+                    {activeTab === 'profile' && 'الملف الشخصي'}
+                  </div>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden border border-white/30 backdrop-blur-md">
+                  {teacher?.photoURL ? (
+                    <img src={teacher.photoURL} alt="User" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-black text-sm">{teacher?.name?.charAt(0)}</div>
+                  )}
+                </div>
+              </div>
+            </header>
 
         {/* 3. Hero Section (Matched design) */}
         {activeTab === 'home' && (
@@ -520,7 +840,7 @@ export default function TeacherPortal() {
                   <p className="text-gray-400 font-bold text-lg">قم بإنشاء ومتابعة اختبارات طلابك</p>
                 </div>
                 <Button onClick={() => { 
-                  setIsExamModalOpen(true); 
+                  setIsExamEditorActive(true); 
                   setCurrentExam(null); 
                   setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '', accessCode: '', questions: [] }); 
                   setJsonPrompt('');
@@ -609,8 +929,8 @@ export default function TeacherPortal() {
                          </div>
                          <div className="flex-1 space-y-6 w-full">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                               <Input label="الاسم الكامل" value={profileForm.name} onChange={e => setProfileForm({ ...profileForm, name: e.target.value })} required icon={<User className="w-4 h-4" />} />
-                               <Input label="المادة الدراسية" value={profileForm.subject} onChange={e => setProfileForm({ ...profileForm, subject: e.target.value })} required icon={<BookOpen className="w-4 h-4" />} />
+                               <Input label="الاسم الكامل" value={profileForm.name} onChange={e => setProfileForm({ ...profileForm, name: e.target.value })} required />
+                               <Input label="المادة الدراسية" value={profileForm.subject} onChange={e => setProfileForm({ ...profileForm, subject: e.target.value })} required />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                <Input label="رقم الهاتف" value={profileForm.phone} onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })} required />
@@ -671,7 +991,9 @@ export default function TeacherPortal() {
              </form>
           </div>
         )}
-      </main>
+        </main>
+      {/* End main content area */}
+      </div>
 
       {/* 4. Navigation Menu Drawer */}
        <AnimatePresence>
@@ -738,270 +1060,17 @@ export default function TeacherPortal() {
       </nav>
 
       {/* Footer Design Header Match */}
-      <footer className="hidden lg:flex flex-col items-center max-w-7xl mx-auto py-16 px-10 border-t border-gray-100">
+      <footer className="hidden lg:flex flex-col items-center max-w-7xl mx-auto py-16 px-10 border-t border-gray-100 pb-32">
          <div className="flex items-center gap-4 opacity-40 mb-6 group cursor-default">
             <div className="w-10 h-10 bg-gray-900 rounded-xl group-hover:bg-[#005bbf] transition-colors"></div>
             <span className="font-black text-xl text-gray-900">{settings?.systemName || 'إديو سنتر'}</span>
          </div>
          <p className="text-sm font-bold text-gray-400">© 2026 جميع الحقوق محفوظة لـ إديو سنتر. تم التصميم بكل فخر.</p>
       </footer>
-
-      {/* Exam Modal */}
-      <Modal isOpen={isExamModalOpen} onClose={() => setIsExamModalOpen(false)} title={currentExam ? 'تعديل الاختبار' : 'إضافة اختبار جديد'} size="lg">
-         <form onSubmit={handleCreateExam} className="space-y-8 pt-6">
-            <Input label="عنوان الاختبار الفني" value={examForm.title} onChange={e => setExamForm({ ...examForm, title: e.target.value })} required placeholder="مثال: مراجعة الوحدة الأولى كيمياء" />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               <div className="space-y-1">
-                  <label className="text-xs font-black text-gray-400 mr-4">الصف المستهدف</label>
-                  <select className="w-full h-16 bg-gray-50 rounded-3xl border-none focus:ring-4 focus:ring-blue-100 font-black px-8" value={examForm.gradeId} onChange={e => setExamForm({ ...examForm, gradeId: e.target.value })} required>
-                      <option value="">اختر الصف الدراسي</option>
-                      {teacher?.gradeIds.map(gid => (
-                        <option key={gid} value={gid}>{getGradeName(gid)}</option>
-                      ))}
-                  </select>
-               </div>
-               <Input label="موعد الاختبار" type="date" value={examForm.date} onChange={e => setExamForm({ ...examForm, date: e.target.value })} required />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-               <Input label="زمن الاختبار (ق)" type="number" value={examForm.duration} onChange={e => setExamForm({ ...examForm, duration: e.target.value })} required />
-               <Input label="الدرجة الكلية" type="number" value={examForm.totalMarks} onChange={e => {
-                  const val = e.target.value;
-                  setExamForm(prev => {
-                    const newTotal = Number(val);
-                    const qCount = prev.questions.length;
-                    if (qCount > 0) {
-                      const marksPerQ = Math.round((newTotal / qCount) * 10) / 10;
-                      return { ...prev, totalMarks: val, questions: prev.questions.map(q => ({ ...q, marks: marksPerQ })) };
-                    }
-                    return { ...prev, totalMarks: val };
-                  });
-               }} required />
-               <Input label="رمز دخول الاختبار" value={examForm.accessCode} onChange={e => setExamForm({ ...examForm, accessCode: e.target.value })} required placeholder="مثال: CHEM2026" />
-            </div>
-
-            <div className="space-y-6 pt-6 border-t border-gray-50">
-               <div className="flex items-center justify-between">
-                  <h4 className="text-xl font-black text-gray-900 flex items-center gap-3">
-                     <span className="material-symbols-outlined text-blue-600">smart_toy</span>
-                     توليد الأسئلة بالذكاء الاصطناعي
-                  </h4>
-                  <p className="text-xs font-bold text-gray-500 pr-12 -mt-4 mb-4">انسخ "تعليمات الـ AI" بالأسفل وأعطها لـ (Gemini/ChatGPT) لتحصل على الأسئلة جاهزة:</p>
-                  <button type="button" onClick={() => {
-                        const template = `[
-  {
-    "q": "أكتب السؤال هنا...",
-    "o": ["اختيار 1", "اختيار 2", "اختيار 3", "اختيار 4"],
-    "c": 0,
-    "m": 5
-  }
-]`;
-                        navigator.clipboard.writeText(template);
-                        toast.success('تم نسخ القالب إلى الحافظة');
-                  }} className="text-blue-600 font-bold text-xs hover:underline flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm">content_copy</span>
-                    نسخ القالب
-                  </button>
-               </div>
-
-               <div className="bg-[#1a202c] text-blue-400 p-6 rounded-[2rem] font-mono text-[11px] leading-relaxed relative overflow-hidden group border border-gray-800 shadow-2xl">
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                      <span className="text-gray-400 uppercase tracking-widest font-black">Prompt Assistant</span>
-                    </div>
-                    <Badge variant="default" className="text-[9px] border-blue-900/50 text-blue-400/50">Fixed Format</Badge>
-                  </div>
-                  <div className="space-y-1 opacity-90">
-                    <p className="text-gray-500 font-bold">// استخدم LaTeX بوضع الرموز بين $$ للحصول على كسور احترافية</p>
-                    <pre className="text-blue-300/80 text-[10px] sm:text-xs bg-black/20 p-4 rounded-xl overflow-x-auto">
-{`[`} <br/>
-{`  {`} <br/>
-{`    "q": "أوجد قيمة النهاية: $$\\lim_{x \\to 2} \\frac{x^2 - 6x}{x^2 + x - 12}$$",`} <br/>
-{`    "o": ["$$\\frac{5}{7}$$", "$$\\frac{1}{7}$$", "$$-1$$", "$$-5$$"],`} <br/>
-{`    "c": 0,`} <br/>
-{`    "m": 5`} <br/>
-{`  }`} <br/>
-{`]`}
-                    </pre>
-                  </div>
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none" />
-               </div>
-
-               <div className="flex gap-4">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="flex-1 h-12 rounded-xl border-blue-100 text-blue-600 font-bold text-sm hover:bg-blue-50 gap-2"
-                    onClick={() => {
-                        const instructions = `سأرسل لك صورة لاختبار أو مجموعة أسئلة. وظيفتك هي تحويلها إلى ملف JSON بدقة عالية جداً.
-الأساسيات:
-1. استخرج الأسئلة والخيارات الأربعة لكل سؤال.
-2. استخدم لغة LaTeX لكافة المعادلات، الرموز، الكسور، والجذور.
-3. هام جداً: لا تضع نصاً عربياً داخل علامات الدولار $$. ضع النص العربي قبلها أو بعدها.
-4. هام جداً: استخدم علامة الدولار المزدوجة $$ قبل وبعد أي كسر أو رمز رياضي ليظهر بشكل عمودي منسق واحترافي.
-5. التنسيق هو JSON ARRAY (قائمة).
-6. حدد رقم الإجابة الصحيحة في الحقل "c" (0 للأول، 1 للثاني...).
-7. ضع الدرجة الافتراضية 5 في "m".
-
-مثال للتنسيق المطلوب:
-[
-  {
-    "q": "أوجد قيمة النهاية: $$ \\lim_{x \\to 2} \\frac{x^2 - 6x}{x^2+x-12} $$",
-    "o": ["$$ \\frac{5}{7} $$", "$$ \\frac{1}{7} $$", "-1", "-5"],
-    "c": 0,
-    "m": 5
-  }
-]`;
-                        navigator.clipboard.writeText(instructions);
-                        toast.success('تم نسخ التعليمات.. أرسلها الآن للـ AI مع صورة الامتحان');
-                    }}
-                  >
-                    <span className="material-symbols-outlined text-xl">smart_toy</span>
-                    نسخ تعليمات الـ AI
-                  </Button>
-               </div>
-
-               <div className="space-y-4">
-                  <textarea 
-                    value={jsonPrompt} 
-                    onChange={e => setJsonPrompt(e.target.value)}
-                    placeholder='أضف كود الـ JSON هنا ثم اضغط على زر الاستيراد بالأسفل...'
-                    className="w-full h-40 bg-gray-50 rounded-[2rem] border-none focus:ring-4 focus:ring-blue-100 font-mono text-sm p-8 shadow-inner"
-                  />
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="w-full h-16 rounded-2xl border-2 border-blue-100 text-blue-600 font-black text-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-3"
-                    onClick={() => {
-                        try {
-                           let parsed;
-                           try {
-                             parsed = JSON.parse(jsonPrompt);
-                           } catch (e) {
-                             throw new Error('تنسيق الـ JSON غير صحيح. تأكد من استخدام علامات الاقتباس المزدوجة " وليس المفردة \'.');
-                           }
-
-                           const items = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.qs || []);
-                           
-                           if (!Array.isArray(items) || items.length === 0) {
-                             throw new Error('لم يتم العثور على مصفوفة أسئلة في الـ JSON المدخل.');
-                           }
-
-                           const normalized = items.map((item: any) => ({
-                              question: item.q || item.question || '',
-                              options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
-                              correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
-                              marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
-                           }));
-
-                           setExamForm(prev => ({ ...prev, questions: normalized }));
-                           toast.success(`تم استيراد ${normalized.length} سؤال بنجاح! راجع الأسئلة بالأسفل.`);
-                        } catch (err: any) {
-                           toast.error('خطأ في تنسيق JSON: ' + err.message);
-                        }
-                    }}
-                  >
-                    <span className="material-symbols-outlined">data_object</span>
-                    تحويل الكود إلى أسئلة الآن
-                  </Button>
-               </div>
-            </div>
-
-            {examForm.questions.length > 0 ? (
-              <div className="space-y-4">
-                <h5 className="font-black text-gray-900 text-sm">مراجعة الأسئلة وتعديل الدرجات ({examForm.questions.length})</h5>
-                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-blue-200">
-                  {examForm.questions.map((q, idx) => (
-                    <div key={idx} className="bg-white border border-gray-100 p-6 rounded-[2rem] space-y-4 shadow-sm hover:border-blue-200 transition-all">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-4 flex-1">
-                          <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-black text-sm shrink-0 mt-1">{idx + 1}</div>
-                          <div className="text-base font-bold text-gray-900 leading-relaxed overflow-x-auto py-1">
-                            <span className="math-wrapper">
-                              <MathJax dynamic>
-                                {q.question}
-                              </MathJax>
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center bg-gray-50 rounded-xl px-3 py-1 border border-gray-100">
-                             <span className="text-[10px] font-black text-gray-400 ml-2">الدرجة:</span>
-                             <input 
-                               type="number" 
-                               value={q.marks} 
-                               onChange={e => {
-                                 const newMarks = Number(e.target.value);
-                                 const updated = [...examForm.questions];
-                                 updated[idx] = { ...updated[idx], marks: newMarks };
-                                 setExamForm({ ...examForm, questions: updated });
-                               }}
-                               className="w-12 h-8 bg-transparent border-none text-center font-black text-sm text-blue-600 focus:ring-0"
-                             />
-                          </div>
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              const updated = examForm.questions.filter((_, i) => i !== idx);
-                              setExamForm({ ...examForm, questions: updated });
-                            }} 
-                            className="w-10 h-10 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-xl flex items-center justify-center transition-all"
-                          >
-                            <span className="material-symbols-outlined text-xl">delete</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mr-12">
-                        {(q.options || []).map((opt: string, oIdx: number) => (
-                          <div 
-                            key={oIdx} 
-                            className={cn(
-                              "p-3 rounded-xl border text-sm font-bold transition-all flex items-center gap-3",
-                              q.correctAnswer === oIdx 
-                                ? "bg-blue-50 border-blue-200 text-[#005bbf]" 
-                                : "bg-gray-50 border-gray-100 text-gray-600"
-                            )}
-                          >
-                            <div className={cn(
-                              "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0",
-                              q.correctAnswer === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-300"
-                            )}>
-                              {q.correctAnswer === oIdx && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                            </div>
-                            <div className="overflow-x-auto">
-                              <span className="math-wrapper">
-                                <MathJax dynamic>
-                                  {opt}
-                                </MathJax>
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-amber-50 border border-amber-100 p-8 rounded-[2rem] text-center space-y-3">
-                 <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
-                    <span className="material-symbols-outlined">warning</span>
-                 </div>
-                 <div>
-                    <p className="text-amber-800 font-black">الاختبار فارغ حالياً</p>
-                    <p className="text-xs text-amber-600 font-bold">يجب عليك الضغط على زر "تحويل الكود إلى أسئلة الآن" بعد لصق الـ JSON لتتمكن من حفظ الاختبار.</p>
-                 </div>
-              </div>
-            )}
-
-            <div className="flex gap-4 pt-10 border-t border-gray-50 flex-col sm:flex-row">
-               <Button type="submit" className="flex-1 h-16 rounded-[1.5rem] font-black text-xl shadow-2xl shadow-blue-200">اعتماد وحفظ</Button>
-               <Button type="button" variant="outline" onClick={() => setIsExamModalOpen(false)} className="flex-1 h-16 rounded-[1.5rem] font-black text-xl border-2">إلغاء</Button>
-            </div>
-         </form>
-      </Modal>
-      </div>
-    </div>
+    </>
+  )}
+</div>
   );
-}
+};
+
+export default TeacherPortal;

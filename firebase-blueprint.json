@@ -114,7 +114,17 @@
         "accessCode": { "type": "string" },
         "questions": {
           "type": "array",
-          "items": { "type": "object" }
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": { "type": "string" },
+              "image": { "type": ["string", "null"] },
+              "options": { "type": "array", "items": { "type": "string" } },
+              "correctAnswer": { "type": "integer" },
+              "marks": { "type": "number" }
+            },
+            "required": ["question", "options", "correctAnswer", "marks"]
+          }
         },
         "createdAt": { "type": "string", "format": "date-time" }
       },
