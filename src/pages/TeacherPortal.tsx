@@ -6,7 +6,6 @@ import { useSettings } from '../contexts/SettingsContext';
 import { Teacher, Grade, Student, Group, Schedule, AppSettings } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
 import { Button, Input, Card, Badge, cn } from '../components/ui';
-import { Modal } from '../components/Modal';
 import { MathJax } from "better-react-mathjax";
 
 import { 
@@ -65,7 +64,6 @@ const TeacherPortal = () => {
 
   // Exams state
   const [exams, setExams] = useState<any[]>([]);
-  const [isExamModalOpen, setIsExamModalOpen] = useState(false);
   const [isExamEditorActive, setIsExamEditorActive] = useState(false);
   const [currentExam, setCurrentExam] = useState<any>(null);
   const [examForm, setExamForm] = useState({
@@ -224,7 +222,7 @@ const TeacherPortal = () => {
       } else {
         await addDoc(collection(db, 'exams'), { ...examData, createdAt: serverTimestamp() });
       }
-      setIsExamModalOpen(false);
+      setIsExamEditorActive(false);
       setExamForm({ title: '', gradeId: '', date: '', duration: '', totalMarks: '', description: '', accessCode: '', questions: [] });
       setJsonPrompt('');
       setCurrentExam(null);
@@ -876,7 +874,7 @@ const TeacherPortal = () => {
                                  questions: exam.questions || []
                               }); 
                               setJsonPrompt('');
-                              setIsExamModalOpen(true); 
+                              setIsExamEditorActive(true); 
                            }} className="w-10 h-10 bg-gray-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all">
                              <span className="material-symbols-outlined text-xl">edit</span>
                           </button>
