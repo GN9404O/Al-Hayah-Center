@@ -77,6 +77,13 @@ const TeacherPortal = () => {
     questions: [] as any[],
   });
   const [jsonPrompt, setJsonPrompt] = useState('');
+  const [manualQuestion, setManualQuestion] = useState({
+    question: '',
+    image: '',
+    options: ['', '', '', ''],
+    correctAnswer: 0,
+    marks: 5
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -452,7 +459,108 @@ const TeacherPortal = () => {
                   </div>
                </Card>
 
-               {/* 3. Questions List */}
+               {/* 3. Manual Question Adder */}
+               <Card className="p-10 rounded-[3rem] border-none shadow-[0_20px_50px_-20_rgba(0,0,0,0.05)] bg-white space-y-8">
+                  <div className="flex items-center gap-4 border-r-4 border-emerald-600 pr-6">
+                    <h3 className="text-2xl font-black text-gray-900">إضافة سؤال يدوياً</h3>
+                  </div>
+
+                  <div className="space-y-6">
+                    <Input 
+                      label="نص السؤال (يدعم LaTeX)" 
+                      value={manualQuestion.question} 
+                      onChange={e => setManualQuestion({ ...manualQuestion, question: e.target.value })}
+                      placeholder="اكتب السؤال هنا... استخدم $$ للرموز الرياضية"
+                      className="rounded-2xl border-gray-100 bg-gray-50/50"
+                    />
+                    
+                    <Input 
+                      label="رابط صورة السؤال (اختياري)" 
+                      value={manualQuestion.image} 
+                      onChange={e => setManualQuestion({ ...manualQuestion, image: e.target.value })}
+                      placeholder="https://example.com/image.jpg"
+                      className="rounded-2xl border-gray-100 bg-gray-50/50"
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {manualQuestion.options.map((opt, i) => (
+                        <div key={i} className="relative group">
+                          <Input 
+                            label={`الخيار ${i + 1}`} 
+                            value={opt} 
+                            onChange={e => {
+                              const newOpts = [...manualQuestion.options];
+                              newOpts[i] = e.target.value;
+                              setManualQuestion({ ...manualQuestion, options: newOpts });
+                            }}
+                            placeholder={`اكتب الخيار ${i + 1} هنا...`}
+                            className={cn(
+                              "rounded-2xl border-gray-100 bg-gray-50/50 pl-14",
+                              manualQuestion.correctAnswer === i && "border-emerald-200 bg-emerald-50/30"
+                            )}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setManualQuestion({ ...manualQuestion, correctAnswer: i })}
+                            className={cn(
+                              "absolute bottom-4 left-4 w-8 h-8 rounded-xl border flex items-center justify-center transition-all",
+                              manualQuestion.correctAnswer === i 
+                                ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-200" 
+                                : "border-gray-200 text-gray-300 hover:border-emerald-300 hover:text-emerald-500"
+                            )}
+                          >
+                            <span className="material-symbols-outlined text-lg font-bold">check</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-4 items-center flex-col sm:flex-row">
+                      <div className="flex-1 w-full">
+                        <Input 
+                          label="درجة السؤال" 
+                          type="number" 
+                          value={manualQuestion.marks} 
+                          onChange={e => setManualQuestion({ ...manualQuestion, marks: Number(e.target.value) })}
+                          className="rounded-2xl border-gray-100 bg-gray-50/50"
+                        />
+                      </div>
+                      <div className="flex-1 w-full pt-6">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (!manualQuestion.question && !manualQuestion.image) {
+                              toast.error('يرجى إدخال نص السؤال أو صورة');
+                              return;
+                            }
+                            if (manualQuestion.options.some(opt => !opt.trim())) {
+                              toast.error('يرجى ملء جميع الخيارات الأربعة');
+                              return;
+                            }
+                            setExamForm(prev => {
+                              const newQuestions = [...prev.questions, { ...manualQuestion }];
+                              return { ...prev, questions: newQuestions };
+                            });
+                            setManualQuestion({
+                              question: '',
+                              image: '',
+                              options: ['', '', '', ''],
+                              correctAnswer: 0,
+                              marks: 5
+                            });
+                            toast.success('تم إضافة السؤال للقائمة');
+                          }}
+                          className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center justify-center gap-3 shadow-xl shadow-emerald-200"
+                        >
+                          <span className="material-symbols-outlined">add_circle</span>
+                          حفظ وإضافة للسؤال القادم
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+               </Card>
+
+               {/* 4. Questions List */}
                {examForm.questions.length > 0 && (
                  <div className="space-y-8">
                     <div className="flex items-center justify-between px-10">
