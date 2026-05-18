@@ -1030,7 +1030,7 @@ const TeacherPortal = () => {
                              <span className="material-symbols-outlined text-xl">edit</span>
                           </button>
                           <button onClick={async () => { if(confirm('هل أنت متأكد من حذف هذا الاختبار؟')) await deleteDoc(doc(db, 'exams', exam.id)); }} className="w-10 h-10 bg-gray-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">
-                             <span className="material-symbols-outlined text-xl">trash</span>
+                             <Trash2 size={18} />
                           </button>
                        </div>
                     </div>
