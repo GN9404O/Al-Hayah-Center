@@ -434,13 +434,28 @@ const TeacherPortal = () => {
                               throw new Error('لم يتم العثور على مصفوفة أسئلة في الـ JSON المدخل.');
                             }
 
-                            const normalized = items.map((item: any) => ({
-                                question: item.q || item.question || '',
-                                image: item.i || item.img || item.image || null,
-                                options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
-                                correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
-                                marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
-                            }));
+                            const normalized = items.map((item: any) => {
+                                let imageUrl = item.i || item.img || item.image || null;
+                                if (imageUrl && typeof imageUrl === 'string') {
+                                    // 1. Try to extract from [img]...[/img] (BBCode)
+                                    const bbMatch = imageUrl.match(/\[img\]\s*(https?:\/\/[^\]\s]+)\s*\[\/img\]/i);
+                                    // 2. Try to extract from Markdown (url) or general URL
+                                    const rawMatch = imageUrl.match(/(https?:\/\/[^\s\]\)"']+)/);
+                                    
+                                    if (bbMatch && bbMatch[1]) {
+                                        imageUrl = bbMatch[1].trim();
+                                    } else if (rawMatch && rawMatch[1]) {
+                                        imageUrl = rawMatch[1].trim();
+                                    }
+                                }
+                                return {
+                                    question: item.q || item.question || '',
+                                    image: imageUrl,
+                                    options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
+                                    correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
+                                    marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
+                                };
+                            });
 
                             setExamForm(prev => ({ ...prev, questions: normalized }));
                             toast.success(`تم بنجاح! تم استيراد ${normalized.length} سؤال.`);
@@ -538,8 +553,21 @@ const TeacherPortal = () => {
                               return;
                             }
                             setExamForm(prev => {
-                              const newQuestions = [...prev.questions, { ...manualQuestion }];
-                              return { ...prev, questions: newQuestions };
+                            let imageUrl = manualQuestion.image;
+                            if (imageUrl && typeof imageUrl === 'string') {
+                                // 1. Try to extract from [img]...[/img] (BBCode)
+                                const bbMatch = imageUrl.match(/\[img\]\s*(https?:\/\/[^\]\s]+)\s*\[\/img\]/i);
+                                // 2. Try to find any direct URL
+                                const rawMatch = imageUrl.match(/(https?:\/\/[^\s\]\)"']+)/);
+                                
+                                if (bbMatch && bbMatch[1]) {
+                                    imageUrl = bbMatch[1].trim();
+                                } else if (rawMatch && rawMatch[1]) {
+                                    imageUrl = rawMatch[1].trim();
+                                }
+                            }
+                            const newQuestions = [...prev.questions, { ...manualQuestion, image: imageUrl }];
+                                return { ...prev, questions: newQuestions };
                             });
                             setManualQuestion({
                               question: '',
@@ -592,8 +620,23 @@ const TeacherPortal = () => {
                                   </div>
                                   <div className="flex-1 space-y-6 min-w-0">
                                      {q.image && (
-                                       <div className="rounded-[2.5rem] overflow-hidden border-4 border-gray-50 max-w-lg bg-white shadow-inner">
-                                          <img src={q.image} alt="Question" className="w-full h-auto object-contain max-h-[350px]" />
+                                       <div className="rounded-[2.5rem] overflow-hidden border-4 border-gray-50 max-w-lg bg-white shadow-inner relative group">
+                                          <img 
+                                            src={q.image} 
+                                            alt="Question" 
+                                            className="w-full h-auto object-contain max-h-[350px]" 
+                                            referrerPolicy="no-referrer"
+                                            onError={(e) => {
+                                              const target = e.target as HTMLImageElement;
+                                              target.onerror = null;
+                                              target.src = 'https://placehold.co/600x400?text=Error+Loading+Image';
+                                            }}
+                                          />
+                                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                            <a href={q.image} target="_blank" rel="noreferrer" className="bg-white text-black px-4 py-2 rounded-full font-bold text-xs">
+                                              فتح الصورة الأصلية
+                                            </a>
+                                          </div>
                                        </div>
                                      )}
                                      <div className="text-2xl font-bold text-gray-900 leading-relaxed break-words">

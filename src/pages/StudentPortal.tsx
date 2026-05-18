@@ -1671,8 +1671,23 @@ export function StudentPortal() {
                               </MathJax>
                             </span>
                             {q.image && (
-                              <div className="mt-6 rounded-3xl overflow-hidden border border-gray-100 shadow-sm max-w-full">
-                                <img src={q.image} alt="Question" className="w-full h-auto object-contain bg-white mx-auto max-h-[400px]" />
+                              <div className="mt-6 rounded-3xl overflow-hidden border border-gray-100 shadow-sm max-w-full relative group">
+                                <img 
+                                  src={q.image} 
+                                  alt="Question" 
+                                  className="w-full h-auto object-contain bg-white mx-auto max-h-[400px]" 
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.onerror = null;
+                                    target.src = 'https://placehold.co/600x400?text=Error+Loading+Image';
+                                  }}
+                                />
+                                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                   <a href={q.image} target="_blank" rel="noreferrer" className="bg-white/90 backdrop-blur-sm text-black px-6 py-3 rounded-2xl font-bold text-sm shadow-xl">
+                                     تكبير الصورة
+                                   </a>
+                                </div>
                               </div>
                             )}
                           </div>
