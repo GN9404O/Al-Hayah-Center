@@ -657,7 +657,7 @@ const TeacherPortal = () => {
         )}
 
         {/* 4. Main Content Area */}
-        <main className={cn("max-w-7xl mx-auto px-6 pb-20 w-full", activeTab === 'home' ? "mt-8" : "pt-12")}>
+        <main className={cn("flex-1 px-6 pb-20 w-full", activeTab === 'home' ? "mt-8" : "pt-12")}>
         {activeTab === 'home' && (
           <div className="space-y-12">
             {/* Quick Stats Grid */}
@@ -990,15 +990,15 @@ const TeacherPortal = () => {
           </div>
         )}
         </main>
+        
         {/* Footer Design Header Match */}
-        <footer className="hidden lg:flex flex-col items-center max-w-7xl mx-auto py-16 px-10 border-t border-gray-100 pb-32">
+        <footer className="hidden lg:flex w-full flex-col items-center py-16 px-10 border-t border-gray-100 bg-white mt-auto">
            <div className="flex items-center gap-4 opacity-40 mb-6 group cursor-default">
               <div className="w-10 h-10 bg-gray-900 rounded-xl group-hover:bg-[#005bbf] transition-colors"></div>
               <span className="font-black text-xl text-gray-900">{settings?.systemName || 'إديو سنتر'}</span>
            </div>
            <p className="text-sm font-bold text-gray-400">© 2026 جميع الحقوق محفوظة لـ إديو سنتر. تم التصميم بكل فخر.</p>
         </footer>
-      {/* End main content area */}
       </div>
 
       {/* 4. Navigation Menu Drawer */}
