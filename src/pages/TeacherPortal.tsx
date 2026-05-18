@@ -1009,9 +1009,43 @@ const TeacherPortal = () => {
                  <Card key={i} className="p-8 rounded-[3rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.06)] border-none group relative overflow-hidden flex flex-col space-y-6 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
                     <div className="flex justify-between items-start">
                        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center shadow-inner">
-                          <span className="material-symbols-outlined text-3xl">quiz</span>
+                          <BookOpen size={30} />
                        </div>
-                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <div className="flex gap-2">
+                          {exam.status === 'active' ? (
+                            <button 
+                              onClick={async () => {
+                                if(confirm('هل أنت متأكد من إنهاء الوقت لجميع الطلاب؟')) {
+                                  await updateDoc(doc(db, 'exams', exam.id), { status: 'ended' });
+                                  toast.success('تم إنهاء الاختبار بنجاح');
+                                }
+                              }} 
+                              className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all"
+                              title="إنهاء الاختبار"
+                            >
+                               <Clock size={18} />
+                            </button>
+                          ) : exam.status === 'ended' ? (
+                            <div className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center opacity-40" title="انتهى الاختبار">
+                               <Clock size={18} />
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={async () => {
+                                if(confirm('هل أنت متأكد من بدء وقت الاختبار؟ هذا سيسمح لجميع الطلاب بالدخول والبدء بالعد التنازلي.')) {
+                                  await updateDoc(doc(db, 'exams', exam.id), { 
+                                    status: 'active', 
+                                    startedAt: serverTimestamp() 
+                                  });
+                                  toast.success('بدأ الاختبار الآن!');
+                                }
+                              }} 
+                              className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center hover:bg-green-600 hover:text-white transition-all"
+                              title="بدء الوقت"
+                            >
+                               <Plus size={20} />
+                            </button>
+                          )}
                           <button onClick={() => { 
                               setCurrentExam(exam); 
                               setExamForm({ 
@@ -1027,7 +1061,7 @@ const TeacherPortal = () => {
                               setJsonPrompt('');
                               setIsExamEditorActive(true); 
                            }} className="w-10 h-10 bg-gray-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all">
-                             <span className="material-symbols-outlined text-xl">edit</span>
+                             <Edit2 size={18} />
                           </button>
                           <button onClick={async () => { if(confirm('هل أنت متأكد من حذف هذا الاختبار؟')) await deleteDoc(doc(db, 'exams', exam.id)); }} className="w-10 h-10 bg-gray-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">
                              <Trash2 size={18} />

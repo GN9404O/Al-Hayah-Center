@@ -31,8 +31,11 @@ export function StudentPortal() {
   const [isDataInitialized, setIsDataInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'schedule' | 'subjects' | 'exams' | 'account'>('home');
   const [exams, setExams] = useState<any[]>([]);
+  const [examResults, setExamResults] = useState<any[]>([]);
   const [selectedExam, setSelectedExam] = useState<any>(null);
   const [isTakingExam, setIsTakingExam] = useState(false);
+  const [examResult, setExamResult] = useState<any>(null);
+  const [isReviewing, setIsReviewing] = useState(false);
   const [examAnswers, setExamAnswers] = useState<Record<number, number>>({});
   const [examStartTime, setExamStartTime] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -145,10 +148,18 @@ export function StudentPortal() {
       (error) => handleFirestoreError(error, OperationType.LIST, 'exams')
     );
 
+    const unsubResults = onSnapshot(
+      query(collection(db, 'exam_results'), where('studentId', '==', user?.uid)),
+      (snapshot) => {
+        setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }
+    );
+
     return () => {
       unsubSchedules();
       unsubGroups();
       unsubExams();
+      unsubResults();
     };
   }, [selectedGradeId, isProfileLoaded]);
 
@@ -324,6 +335,7 @@ export function StudentPortal() {
     if (!selectedExam) return;
 
     try {
+      setLoading(true);
       // Calculate score
       let score = 0;
       let questions = selectedExam.questions || [];
@@ -337,31 +349,43 @@ export function StudentPortal() {
         }
       }
 
-      (questions || []).forEach((q: any, idx: number) => {
-        if (examAnswers[idx] === q.correctAnswer) {
+      const results = (questions || []).map((q: any, idx: number) => {
+        const isCorrect = examAnswers[idx] === q.correctAnswer;
+        if (isCorrect) {
           score += Number(q.marks || 0);
         }
+        return {
+          questionIndex: idx,
+          studentAnswer: examAnswers[idx],
+          correctAnswer: q.correctAnswer,
+          isCorrect
+        };
       });
 
       const resultData = {
         examId: selectedExam.id,
         examTitle: selectedExam.title,
         studentId: user?.uid,
-        studentName: user?.displayName,
+        studentName: studentProfile?.name || user?.displayName,
         score,
         totalMarks: selectedExam.totalMarks,
         answers: examAnswers,
+        resultsDetail: results,
         completedAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, 'exam_results'), resultData);
+      const docRef = await addDoc(collection(db, 'exam_results'), resultData);
       
+      setExamResult({ id: docRef.id, ...resultData, questions });
       toast.success(`تم تسليم الاختبار بنجاح! درجتك: ${score}/${selectedExam.totalMarks}`);
       setIsTakingExam(false);
-      setSelectedExam(null);
       setTimeLeft(null);
     } catch (error) {
+      console.error('Error submitting exam:', error);
       handleFirestoreError(error, OperationType.CREATE, 'exam_results');
+      toast.error('حدث خطأ أثناء تسليم الاختبار. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1245,28 +1269,73 @@ export function StudentPortal() {
                           <p className="font-bold opacity-40">لا توجد اختبارات متاحة حالياً لصفك الدراسي.</p>
                         </div>
                       ) : (
-                        exams.map(exam => (
-                          <div key={exam.id} className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl flex flex-col hover:bg-white hover:shadow-xl transition-all group">
-                             <div className="flex justify-between items-start mb-6">
-                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
-                                   <span className="material-symbols-outlined">description</span>
-                                </div>
-                                <span className="text-[10px] font-black text-gray-400 uppercase bg-white px-3 py-1 rounded-full">{exam.duration} دقيقة</span>
-                             </div>
-                             <h4 className="text-lg font-bold text-gray-900 mb-2 truncate">{exam.title}</h4>
-                             <p className="text-xs text-gray-400 font-bold mb-6 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-sm">person</span>
-                                {exam.teacherName}
-                             </p>
-                             
-                             <button
-                               onClick={() => setSelectedExam(exam)}
-                               className="mt-auto h-12 rounded-2xl bg-white border border-blue-100 text-[#005bbf] text-sm font-black hover:bg-[#005bbf] hover:text-white transition-all shadow-sm"
-                             >
-                               دخول الاختبار
-                             </button>
-                          </div>
-                        ))
+                        exams.map(exam => {
+                          const result = examResults.find(r => r.examId === exam.id);
+                          return (
+                            <div key={exam.id} className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl flex flex-col hover:bg-white hover:shadow-xl transition-all group">
+                               <div className="flex justify-between items-start mb-6">
+                                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                                     <span className="material-symbols-outlined">description</span>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-1">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase bg-white px-3 py-1 rounded-full">{exam.duration} دقيقة</span>
+                                    {exam.status === 'active' && (
+                                      <span className="text-[9px] font-black text-green-500 flex items-center gap-1 animate-pulse">
+                                         <span className="w-1 h-1 bg-green-500 rounded-full"></span>
+                                         قيد التشغيل
+                                      </span>
+                                    )}
+                                  </div>
+                               </div>
+                               <h4 className="text-lg font-bold text-gray-900 mb-2 truncate">{exam.title}</h4>
+                               <p className="text-xs text-gray-400 font-bold mb-6 flex items-center gap-2">
+                                  <span className="material-symbols-outlined text-sm">person</span>
+                                  {exam.teacherName}
+                               </p>
+                               
+                               {result ? (
+                                 <div className="mt-auto space-y-3">
+                                   <div className="flex items-center justify-between text-xs font-bold bg-green-50 text-green-700 p-3 rounded-xl border border-green-100">
+                                      <span>درجتك:</span>
+                                      <span className="text-sm font-black">{result.score} / {exam.totalMarks}</span>
+                                   </div>
+                                   {exam.status === 'ended' ? (
+                                      <button
+                                        onClick={() => {
+                                          setExamResult({...result, questions: exam.questions});
+                                          setIsReviewing(true);
+                                        }}
+                                        className="w-full h-11 rounded-2xl bg-[#005bbf] text-white text-xs font-black hover:bg-blue-700 transition-all shadow-md"
+                                      >
+                                        مراجعة وتصحيح الإجابات
+                                      </button>
+                                   ) : (
+                                      <p className="text-[10px] text-center text-gray-400 font-bold italic">سيتاح التصحيح بعد انتهاء وقت الاختبار</p>
+                                   )}
+                                 </div>
+                               ) : (
+                                 <button
+                                   onClick={() => {
+                                     if (exam.status !== 'active') {
+                                       toast.error('عذراً، هذا الاختبار لم يبدأ بعد أو انتهى وقته.');
+                                       return;
+                                     }
+                                     setSelectedExam(exam);
+                                   }}
+                                   disabled={exam.status !== 'active'}
+                                   className={cn(
+                                     "mt-auto h-12 rounded-2xl text-sm font-black transition-all shadow-sm",
+                                     exam.status === 'active' 
+                                      ? "bg-white border border-blue-100 text-[#005bbf] hover:bg-[#005bbf] hover:text-white" 
+                                      : "bg-gray-100 text-gray-400 cursor-not-allowed border-none"
+                                   )}
+                                 >
+                                   {exam.status === 'active' ? 'دخول الاختبار' : 'غير متاح حالياً'}
+                                 </button>
+                               )}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -1591,9 +1660,19 @@ export function StudentPortal() {
                   <button onClick={() => {
                     if (accessCodeInput.trim().toUpperCase() === (selectedExam.accessCode || '').toUpperCase()) {
                       toast.success('تم التحقق بنجاح! جاري تحميل الاختبار...');
+                      
+                      let durationInSeconds = Number(selectedExam.duration || 60) * 60;
+                      
+                      // Calculate remaining time based on server start time if available
+                      if (selectedExam.startedAt) {
+                        const startTime = selectedExam.startedAt.toMillis();
+                        const now = Date.now();
+                        const elapsedSeconds = Math.floor((now - startTime) / 1000);
+                        durationInSeconds = Math.max(0, durationInSeconds - elapsedSeconds);
+                      }
+                      
                       setExamStartTime(Date.now());
                       setExamAnswers({});
-                      const durationInSeconds = Number(selectedExam.duration || 60) * 60;
                       setTimeLeft(durationInSeconds);
                       setIsTakingExam(true);
                       setAccessCodeInput('');
@@ -1732,6 +1811,151 @@ export function StudentPortal() {
                     );
                   }
                 })()}
+              </div>
+            </main>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* Exam Result Overlay */}
+      <AnimatePresence>
+        {examResult && !isReviewing && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-[#005bbf]/10 backdrop-blur-3xl z-[300] flex items-center justify-center p-6" dir="rtl">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white rounded-[3.5rem] shadow-2xl max-w-lg w-full p-12 text-center border-none relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-full h-2 bg-gradient-to-r from-blue-400 via-blue-600 to-blue-400" />
+               
+               <div className="w-24 h-24 bg-green-50 rounded-[2rem] flex items-center justify-center text-green-600 mx-auto mb-8 shadow-xl shadow-green-50/50">
+                  <span className="material-symbols-outlined text-5xl">celebration</span>
+               </div>
+
+               <h2 className="text-3xl font-black text-gray-900 mb-2">تم التسليم بنجاح!</h2>
+               <p className="text-gray-400 font-bold mb-10">لقد انتهيت من اختبار: <br/><span className="text-blue-600">{examResult.examTitle}</span></p>
+
+               <div className="bg-gray-50 rounded-[2.5rem] p-10 mb-10 border border-gray-100 flex flex-col items-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-4">الدرجة النهائية المحصلة</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-7xl font-black text-[#005bbf]">{examResult.score}</span>
+                    <span className="text-2xl font-bold text-gray-300">/ {examResult.totalMarks}</span>
+                  </div>
+               </div>
+
+               <div className="flex gap-4">
+                  <button 
+                    onClick={() => {
+                      setExamResult(null);
+                      setSelectedExam(null);
+                    }} 
+                    className="flex-1 h-16 rounded-2xl bg-[#005bbf] text-white font-black text-lg shadow-xl shadow-blue-200 active:scale-95 transition-all"
+                  >
+                    العودة للرئيسية
+                  </button>
+               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Exam Review Overlay */}
+      <AnimatePresence>
+        {isReviewing && examResult && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-white z-[400] overflow-y-auto" dir="rtl">
+            <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
+              <div className="max-w-4xl mx-auto px-6 h-20 flex justify-between items-center">
+                <div className="flex items-center gap-6">
+                  <button 
+                    onClick={() => {
+                      setIsReviewing(false);
+                      setExamResult(null);
+                      setSelectedExam(null);
+                    }} 
+                    className="w-12 h-12 rounded-2xl hover:bg-gray-50 flex items-center justify-center text-gray-400 transition-all border border-gray-100"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                  <div>
+                    <h2 className="text-lg font-black text-gray-900 leading-none">مراجعة وتصحيح: {examResult.examTitle}</h2>
+                    <p className="text-xs text-blue-600 font-black mt-1">درجتك النهائية: {examResult.score}/{examResult.totalMarks}</p>
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <main className="max-w-3xl mx-auto px-6 py-10 pb-32">
+              <div className="space-y-12">
+                {(examResult.questions || []).map((q: any, qIdx: number) => {
+                  const studentAnswerIdx = examResult.answers[qIdx];
+                  const correctAnswerIdx = q.correctAnswer;
+                  const isCorrect = studentAnswerIdx === correctAnswerIdx;
+
+                  return (
+                    <div key={qIdx} className={cn(
+                      "bg-white p-8 md:p-12 rounded-[3.5rem] shadow-[0_10px_50px_-15px_rgba(0,0,0,0.05)] border-2 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500",
+                      isCorrect ? "border-green-100" : "border-red-100"
+                    )}>
+                      <div className="flex gap-6 items-start">
+                        <div className={cn(
+                          "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shrink-0 shadow-lg",
+                          isCorrect ? "bg-green-600 text-white shadow-green-100" : "bg-red-600 text-white shadow-red-100"
+                        )}>{qIdx + 1}</div>
+                        <div className="text-2xl font-black text-gray-900 leading-relaxed overflow-x-auto py-2 scrollbar-none flex-1">
+                          <span className="math-wrapper">
+                            <MathJax dynamic>{q.question}</MathJax>
+                          </span>
+                          {q.image && (
+                            <div className="mt-6 rounded-3xl overflow-hidden border border-gray-100 shadow-sm max-w-full">
+                              <img src={q.image} alt="Question" className="w-full h-auto object-contain bg-white mx-auto max-h-[400px]" referrerPolicy="no-referrer" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(q.options || []).map((opt: string, oIdx: number) => {
+                          const isStudentSelected = studentAnswerIdx === oIdx;
+                          const isCorrectOption = correctAnswerIdx === oIdx;
+
+                          return (
+                            <div 
+                              key={oIdx} 
+                              className={cn(
+                                "flex items-center gap-4 p-5 rounded-2xl text-right border-2 transition-all",
+                                isCorrectOption ? "bg-green-50 border-green-500 text-green-700" : 
+                                isStudentSelected && !isCorrectOption ? "bg-red-50 border-red-500 text-red-700" :
+                                "bg-white border-transparent text-gray-400 opacity-60"
+                              )}
+                            >
+                              <div className={cn(
+                                "w-10 h-10 rounded-full border-4 flex items-center justify-center shrink-0",
+                                isCorrectOption ? "border-green-500 bg-green-500" : 
+                                isStudentSelected ? "border-red-500 bg-red-500" : "border-gray-100"
+                              )}>
+                                {(isCorrectOption || isStudentSelected) && (
+                                  <span className="material-symbols-outlined text-white text-sm">
+                                    {isCorrectOption ? 'check' : 'close'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="font-bold text-lg overflow-x-auto py-1 scrollbar-none flex-1">
+                                <span className="math-wrapper">
+                                  <MathJax dynamic>{opt}</MathJax>
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {!isCorrect && (
+                        <div className="bg-red-50 p-6 rounded-2xl border border-red-100 flex items-center gap-4">
+                           <span className="material-symbols-outlined text-red-500">info</span>
+                           <p className="text-red-700 font-bold text-sm leading-relaxed">
+                             إجابتك المسجلة كانت غير صحيحة. الإجابة المظللة بالأخضر هي الصحيحة.
+                           </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </main>
           </motion.div>
