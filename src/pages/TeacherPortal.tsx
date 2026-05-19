@@ -66,6 +66,8 @@ const TeacherPortal = () => {
   const [exams, setExams] = useState<any[]>([]);
   const [isExamEditorActive, setIsExamEditorActive] = useState(false);
   const [currentExam, setCurrentExam] = useState<any>(null);
+  const [viewingResultsExam, setViewingResultsExam] = useState<any>(null);
+  const [examResults, setExamResults] = useState<any[]>([]);
   const [examForm, setExamForm] = useState({
     title: '',
     gradeId: '',
@@ -157,14 +159,34 @@ const TeacherPortal = () => {
   }, [teacher]);
 
   useEffect(() => {
-    if (groups.length === 0) return;
-    const groupIds = groups.map(g => g.id);
+    if (!viewingResultsExam) {
+      setExamResults([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'exam_results'),
+      where('examId', '==', viewingResultsExam.id),
+      orderBy('completedAt', 'desc')
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => unsub();
+  }, [viewingResultsExam]);
+
+  useEffect(() => {
+    if (!teacher) return;
+    const teacherGradeIds = teacher.gradeIds || [];
     const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
       const allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-      setStudents(allStudents.filter(s => groupIds.includes(s.groupId)));
+      // Show students who are in the teacher's grades
+      setStudents(allStudents.filter(s => teacherGradeIds.includes(s.gradeId)));
     });
     return () => unsubStudents();
-  }, [groups]);
+  }, [teacher]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -416,40 +438,47 @@ const TeacherPortal = () => {
                           type="button" 
                           className="flex-1 h-14 rounded-2xl bg-[#3b82f6] hover:bg-blue-600 text-white font-black flex items-center justify-center gap-3 shadow-xl shadow-blue-900/30 transition-all active:scale-95"
                           onClick={() => {
-                              const instructions = `سأرسل لك صورة لاختبار أو مجموعة أسئلة. وظيفتك هي تحويلها إلى ملف JSON بدقة عالية جداً.
-الأساسيات:
-1. استخرج الأسئلة والخيارات لكل سؤال.
-2. يدعم النظام نوعين من الأسئلة: 
-   - سؤال فردي ("type": "mcq")
-   - سؤال مجمع/فقرة ("type": "passage") يحتوي على أسئلة فرعية.
-3. استخدم لغة LaTeX لكافة المعادلات، الرموز، الكسور، والجذور (مثلاً: $$ \\frac{x}{y} $$).
-4. الروابط: إذا وجد رسم، ضعه في حقل "i".
-5. التنسيق هو JSON ARRAY (قائمة).
+                              const instructions = `أنت مساعد تعليمي محترف متخصص في تحويل الاختبارات الورقية واليدوية إلى صيغة JSON.
+سأقوم بتزويدك بصور للاختبار، والمطلوب منك هو استخراج الأسئلة بدقة كاملة مع الالتزام بالقواعد التالية:
 
-هيكل السؤال الفردي (MCQ):
+1. هيكل المخرجات: يجب أن يكون المخرجات عبارة عن ARRAY JSON واحد يحتوي على كافة الأسئلة.
+
+2. أنواع الأسئلة المدعومة:
+   - سؤال فردي (MCQ): يستخدم النوع "type": "mcq".
+   - سؤال مجمع (Passage): يستخدم النوع "type": "passage" للأسئلة التي تتبع فقرة معينة أو رسم هندسي واحد، وتوضع الأسئلة الفرعية في مصفوفة "sq".
+
+3. التنسيق البرمجي (Schema):
+
+أ- السؤال الفردي (MCQ):
 {
   "type": "mcq",
-  "q": "نص السؤال هنا",
-  "o": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
-  "c": 0, (رقم الإجابة الصحيحة تبدأ من 0)
-  "m": 5 (الدرجة)
+  "q": "نص السؤال هنا.. استخدم $ $ للمعادلات",
+  "o": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+  "c": 0, // فهرس الإجابة الصحيحة (0=الأول، 1=الثاني، 2=الثالث، 3=الرابع)
+  "m": 2, // درجة السؤال
+  "i": "رابط الصورة إن وجد"
 }
 
-هيكل السؤال المجمع (Passage):
+ب- السؤال المجمع (Passage):
 {
   "type": "passage",
-  "q": "نص الفقرة أو رأس السؤال المجمع هنا",
-  "sq": [ (قائمة الأسئلة الفرعية)
+  "q": "نص الفقرة أو رأس السؤال (مثلاً: اقرأ الفقرة التالية ثم أجب)",
+  "i": "رابط صورة الفقرة أو الرسم التوضيحي",
+  "sq": [
     {
       "q": "السؤال الفرعي الأول",
       "o": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
       "c": 1,
-      "m": 2
+      "m": 1
     }
   ]
 }
 
-هام: تأكد من أن الـ JSON صالح وقابل للقراءة.`;
+4. ملاحظات هامة جداً:
+- المعادلات والرموز الرياضية: يجب كتابتها بصيغة LaTeX محاطة بـ $ $ (مثلاً: $x^2 + y^2 = r^2$).
+- لا تضف أي نصوص توضيحية قبل أو بعد مصفوفة الـ JSON.
+- تأكد من استخراج كافة الخيارات بشكل صحيح.
+- في حالة السؤال المجمع، تأكد من وضع كافة الأسئلة التابعة له داخل "sq".`;
                               navigator.clipboard.writeText(instructions);
                               toast.success('تم نسخ التعليمات المحدثة.. أرسلها الآن للـ AI');
                           }}
@@ -1345,53 +1374,122 @@ const TeacherPortal = () => {
                 </Button>
              </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-               {exams.length === 0 ? (
-                 <div className="col-span-full py-40 flex flex-col items-center justify-center text-gray-300">
-                    <span className="material-symbols-outlined text-9xl mb-8 opacity-10">assignment_late</span>
-                    <p className="text-2xl font-black opacity-30 italic">لا يوجد اختبارات مضافة حالياً</p>
-                 </div>
-               ) : exams.map((exam, i) => (
-                 <Card key={i} className="p-8 rounded-[3rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.06)] border-none group relative overflow-hidden flex flex-col space-y-6 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
-                    <div className="flex justify-between items-start">
-                       <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center shadow-inner">
-                          <BookOpen size={30} />
-                       </div>
-                       <div className="flex gap-2">
-                          {exam.status === 'active' ? (
-                            <button 
-                              onClick={async () => {
-                                if(confirm('هل أنت متأكد من إنهاء الوقت لجميع الطلاب؟')) {
-                                  await updateDoc(doc(db, 'exams', exam.id), { status: 'ended' });
-                                  toast.success('تم إنهاء الاختبار بنجاح');
-                                }
-                              }} 
-                              className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all"
-                              title="إنهاء الاختبار"
-                            >
-                               <Clock size={18} />
-                            </button>
-                          ) : exam.status === 'ended' ? (
-                            <div className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center opacity-40" title="انتهى الاختبار">
-                               <Clock size={18} />
-                            </div>
-                          ) : (
-                            <button 
-                              onClick={async () => {
-                                if(confirm('هل أنت متأكد من بدء وقت الاختبار؟ هذا سيسمح لجميع الطلاب بالدخول والبدء بالعد التنازلي.')) {
-                                  await updateDoc(doc(db, 'exams', exam.id), { 
-                                    status: 'active', 
-                                    startedAt: serverTimestamp() 
-                                  });
-                                  toast.success('بدأ الاختبار الآن!');
-                                }
-                              }} 
-                              className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center hover:bg-green-600 hover:text-white transition-all"
-                              title="بدء الوقت"
-                            >
-                               <Plus size={20} />
-                            </button>
-                          )}
+             {viewingResultsExam ? (
+                <div className="space-y-8 animate-in slide-in-from-top duration-500">
+                  <div className="flex items-center justify-between">
+                    <button 
+                      onClick={() => setViewingResultsExam(null)}
+                      className="flex items-center gap-2 text-gray-500 hover:text-blue-600 font-bold transition-colors"
+                    >
+                      <ChevronLeft className="w-5 h-5 rotate-180" />
+                      العودة لقائمة الاختبارات
+                    </button>
+                    <div className="text-left">
+                      <h3 className="text-2xl font-black text-gray-900">{viewingResultsExam.title}</h3>
+                      <p className="text-gray-400 font-bold">نتائج الطلاب ({examResults.length})</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-50 overflow-hidden">
+                    <table className="w-full text-right border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="px-8 py-6 text-sm font-black text-gray-400 uppercase tracking-widest text-right">الطالب</th>
+                          <th className="px-8 py-6 text-sm font-black text-gray-400 uppercase tracking-widest text-center">الدرجة</th>
+                          <th className="px-8 py-6 text-sm font-black text-gray-400 uppercase tracking-widest text-center">النسبة</th>
+                          <th className="px-8 py-6 text-sm font-black text-gray-400 uppercase tracking-widest text-left">وقت التسليم</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {examResults.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-8 py-20 text-center text-gray-300 italic font-bold">
+                              لم يتم تسجيل أي نتائج لهذا الاختبار بعد
+                            </td>
+                          </tr>
+                        ) : (
+                          examResults.map((res, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-8 py-6">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
+                                    {res.studentName?.charAt(0)}
+                                  </div>
+                                  <span className="font-black text-gray-900">{res.studentName}</span>
+                                </div>
+                              </td>
+                              <td className="px-8 py-6 text-center">
+                                <Badge className={cn(
+                                  "font-black px-4 py-1 rounded-lg",
+                                  (res.score / res.totalMarks) >= 0.5 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                                )}>
+                                  {res.score} / {res.totalMarks}
+                                </Badge>
+                              </td>
+                              <td className="px-8 py-6 text-center font-black text-gray-600">
+                                {Math.round((res.score / res.totalMarks) * 100)}%
+                              </td>
+                              <td className="px-8 py-6 text-left font-bold text-gray-400 text-sm">
+                                {res.completedAt?.toDate ? res.completedAt.toDate().toLocaleString('ar-EG') : 'الآن'}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {exams.length === 0 ? (
+                  <div className="col-span-full py-40 flex flex-col items-center justify-center text-gray-300">
+                     <span className="material-symbols-outlined text-9xl mb-8 opacity-10">assignment_late</span>
+                     <p className="text-2xl font-black opacity-30 italic">لا يوجد اختبارات مضافة حالياً</p>
+                  </div>
+                ) : exams.map((exam, i) => (
+                  <Card key={i} className="p-8 rounded-[3rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.06)] border-none group relative overflow-hidden flex flex-col space-y-6 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
+                     <div className="flex justify-between items-start">
+                        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center shadow-inner">
+                           <BookOpen size={30} />
+                        </div>
+                        <div className="flex gap-2">
+                           {exam.status === 'active' ? (
+                             <button 
+                               onClick={async () => {
+                                 if(confirm('هل أنت متأكد من إنهاء الوقت لجميع الطلاب؟')) {
+                                   await updateDoc(doc(db, 'exams', exam.id), { status: 'ended' });
+                                   toast.success('تم إنهاء الاختبار بنجاح');
+                                 }
+                               }} 
+                               className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all"
+                               title="إنهاء الاختبار"
+                             >
+                                <Clock size={18} />
+                             </button>
+                           ) : exam.status === 'ended' ? (
+                             <div className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center opacity-40" title="انتهى الاختبار">
+                                <Clock size={18} />
+                             </div>
+                           ) : (
+                             <button 
+                               onClick={async () => {
+                                 if(confirm('هل أنت متأكد من بدء وقت الاختبار؟ هذا سيسمح لجميع الطلاب بالدخول والبدء بالعد التنازلي.')) {
+                                   await updateDoc(doc(db, 'exams', exam.id), { 
+                                     status: 'active', 
+                                     startedAt: serverTimestamp() 
+                                   });
+                                   toast.success('بدأ الاختبار الآن!');
+                                 }
+                               }} 
+                               className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center hover:bg-green-600 hover:text-white transition-all"
+                               title="بدء الوقت"
+                             >
+                                <Plus size={20} />
+                             </button>
+                           )}
+                          <button onClick={() => setViewingResultsExam(exam)} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all" title="استعراض النتائج">
+                             <Users size={18} />
+                          </button>
                           <button onClick={() => { 
                               setCurrentExam(exam); 
                               setExamForm({ 
@@ -1412,28 +1510,29 @@ const TeacherPortal = () => {
                           <button onClick={async () => { if(confirm('هل أنت متأكد من حذف هذا الاختبار؟')) await deleteDoc(doc(db, 'exams', exam.id)); }} className="w-10 h-10 bg-gray-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">
                              <Trash2 size={18} />
                           </button>
-                       </div>
-                    </div>
-                    <div>
-                       <h4 className="text-2xl font-black text-gray-900 mb-2 leading-tight">{exam.title}</h4>
-                       <div className="flex flex-wrap gap-2">
-                          <Badge className="bg-blue-50 text-blue-600 border-none font-black">{getGradeName(exam.gradeId)}</Badge>
-                          <Badge className="bg-green-50 text-green-600 border-none font-black">{exam.totalMarks} درجة</Badge>
-                       </div>
-                    </div>
-                    <div className="pt-6 border-t border-gray-50 flex items-center justify-between text-gray-400 font-bold text-xs uppercase tracking-widest">
-                       <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-lg">calendar_today</span>
-                          <span>{exam.date}</span>
-                       </div>
-                       <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-lg">timer</span>
-                          <span>{exam.duration} دقيقة</span>
-                       </div>
-                    </div>
-                 </Card>
-               ))}
-             </div>
+                        </div>
+                     </div>
+                     <div>
+                        <h4 className="text-2xl font-black text-gray-900 mb-2 leading-tight">{exam.title}</h4>
+                        <div className="flex flex-wrap gap-2">
+                           <Badge className="bg-blue-50 text-blue-600 border-none font-black">{getGradeName(exam.gradeId)}</Badge>
+                           <Badge className="bg-green-50 text-green-600 border-none font-black">{exam.totalMarks} درجة</Badge>
+                        </div>
+                     </div>
+                     <div className="pt-6 border-t border-gray-50 flex items-center justify-between text-gray-400 font-bold text-xs uppercase tracking-widest">
+                        <div className="flex items-center gap-2">
+                           <span className="material-symbols-outlined text-lg">calendar_today</span>
+                           <span>{exam.date}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                           <span className="material-symbols-outlined text-lg">timer</span>
+                           <span>{exam.duration} دقيقة</span>
+                        </div>
+                     </div>
+                  </Card>
+                ))}
+              </div>
+              )}
           </div>
         )}
 
