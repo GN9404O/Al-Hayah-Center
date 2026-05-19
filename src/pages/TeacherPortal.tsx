@@ -78,6 +78,15 @@ const TeacherPortal = () => {
   });
   const [jsonPrompt, setJsonPrompt] = useState('');
   const [manualQuestion, setManualQuestion] = useState({
+    type: 'mcq', // 'mcq' or 'passage'
+    question: '',
+    image: '',
+    options: ['', '', '', ''],
+    correctAnswer: 0,
+    marks: 5,
+    subQuestions: [] as any[]
+  });
+  const [manualSubQuestion, setManualSubQuestion] = useState({
     question: '',
     image: '',
     options: ['', '', '', ''],
@@ -476,115 +485,299 @@ const TeacherPortal = () => {
 
                {/* 3. Manual Question Adder */}
                <Card className="p-10 rounded-[3rem] border-none shadow-[0_20px_50px_-20_rgba(0,0,0,0.05)] bg-white space-y-8">
-                  <div className="flex items-center gap-4 border-r-4 border-emerald-600 pr-6">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-r-4 border-emerald-600 pr-6">
                     <h3 className="text-2xl font-black text-gray-900">إضافة سؤال يدوياً</h3>
+                    <div className="flex bg-gray-100 p-1.5 rounded-2xl gap-2">
+                       <button 
+                         type="button"
+                         onClick={() => setManualQuestion({ ...manualQuestion, type: 'mcq' })}
+                         className={cn(
+                           "px-6 py-2 rounded-xl text-sm font-black transition-all",
+                           manualQuestion.type === 'mcq' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                         )}
+                       >سؤال فردي</button>
+                       <button 
+                         type="button"
+                         onClick={() => setManualQuestion({ ...manualQuestion, type: 'passage' })}
+                         className={cn(
+                           "px-6 py-2 rounded-xl text-sm font-black transition-all",
+                           manualQuestion.type === 'passage' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                         )}
+                       >فقرة / مجموعة أسئلة</button>
+                    </div>
                   </div>
 
                   <div className="space-y-6">
-                    <Input 
-                      label="نص السؤال (يدعم LaTeX)" 
-                      value={manualQuestion.question} 
-                      onChange={e => setManualQuestion({ ...manualQuestion, question: e.target.value })}
-                      placeholder="اكتب السؤال هنا... استخدم $$ للرموز الرياضية"
-                      className="rounded-2xl border-gray-100 bg-gray-50/50"
-                    />
-                    
-                    <Input 
-                      label="رابط صورة السؤال (اختياري)" 
-                      value={manualQuestion.image} 
-                      onChange={e => setManualQuestion({ ...manualQuestion, image: e.target.value })}
-                      placeholder="https://example.com/image.jpg"
-                      className="rounded-2xl border-gray-100 bg-gray-50/50"
-                    />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {manualQuestion.options.map((opt, i) => (
-                        <div key={i} className="relative group">
+                    {manualQuestion.type === 'passage' ? (
+                      <div className="space-y-8 bg-emerald-50/20 p-8 rounded-[2.5rem] border border-emerald-100/50">
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-black text-emerald-600 uppercase tracking-widest">محتوى الفقرة الأساسية</h4>
                           <Input 
-                            label={`الخيار ${i + 1}`} 
-                            value={opt} 
-                            onChange={e => {
-                              const newOpts = [...manualQuestion.options];
-                              newOpts[i] = e.target.value;
-                              setManualQuestion({ ...manualQuestion, options: newOpts });
-                            }}
-                            placeholder={`اكتب الخيار ${i + 1} هنا...`}
-                            className={cn(
-                              "rounded-2xl border-gray-100 bg-gray-50/50 pl-14",
-                              manualQuestion.correctAnswer === i && "border-emerald-200 bg-emerald-50/30"
-                            )}
+                            label="نص الفقرة أو السؤال الرئيسي" 
+                            value={manualQuestion.question} 
+                            onChange={e => setManualQuestion({ ...manualQuestion, question: e.target.value })}
+                            placeholder="اكتب الفقرة هنا... مثلاً: اقرأ النص التالي ثم أجب عن الأسئلة"
+                            className="rounded-2xl border-emerald-100 bg-white"
                           />
-                          <button
-                            type="button"
-                            onClick={() => setManualQuestion({ ...manualQuestion, correctAnswer: i })}
-                            className={cn(
-                              "absolute bottom-4 left-4 w-8 h-8 rounded-xl border flex items-center justify-center transition-all",
-                              manualQuestion.correctAnswer === i 
-                                ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-200" 
-                                : "border-gray-200 text-gray-300 hover:border-emerald-300 hover:text-emerald-500"
-                            )}
-                          >
-                            <span className="material-symbols-outlined text-lg font-bold">check</span>
-                          </button>
+                          <Input 
+                            label="رابط صورة الفقرة (اختياري)" 
+                            value={manualQuestion.image} 
+                            onChange={e => setManualQuestion({ ...manualQuestion, image: e.target.value })}
+                            placeholder="https://example.com/passage-image.jpg"
+                            className="rounded-2xl border-emerald-100 bg-white"
+                          />
                         </div>
-                      ))}
-                    </div>
 
-                    <div className="flex gap-4 items-center flex-col sm:flex-row">
-                      <div className="flex-1 w-full">
+                        <div className="space-y-6 pt-6 border-t border-emerald-100">
+                          <div className="flex items-center justify-between">
+                             <h4 className="text-sm font-black text-gray-500 uppercase tracking-widest">إضافة أسئلة تابعة للفقرة ({manualQuestion.subQuestions?.length || 0})</h4>
+                          </div>
+
+                          <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                            <Input 
+                              label="نص السؤال الفرعي" 
+                              value={manualSubQuestion.question} 
+                              onChange={e => setManualSubQuestion({ ...manualSubQuestion, question: e.target.value })}
+                              className="rounded-xl border-gray-100"
+                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {manualSubQuestion.options.map((opt, i) => (
+                                <div key={i} className="relative group">
+                                  <Input 
+                                    label={`الخيار ${i + 1}`} 
+                                    value={opt} 
+                                    onChange={e => {
+                                      const newOpts = [...manualSubQuestion.options];
+                                      newOpts[i] = e.target.value;
+                                      setManualSubQuestion({ ...manualSubQuestion, options: newOpts });
+                                    }}
+                                    className={cn(
+                                      "rounded-xl border-gray-50 bg-gray-50/30 pl-12",
+                                      manualSubQuestion.correctAnswer === i && "border-emerald-200 bg-emerald-50/30"
+                                    )}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setManualSubQuestion({ ...manualSubQuestion, correctAnswer: i })}
+                                    className={cn(
+                                      "absolute bottom-3 left-3 w-7 h-7 rounded-lg border flex items-center justify-center transition-all",
+                                      manualSubQuestion.correctAnswer === i 
+                                        ? "bg-emerald-500 border-emerald-500 text-white" 
+                                        : "border-gray-200 text-gray-300 hover:text-emerald-500"
+                                    )}
+                                  >
+                                    <span className="material-symbols-outlined text-sm font-bold">check</span>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex gap-4 items-center">
+                               <div className="w-32">
+                                <label className="text-[10px] font-black text-gray-400 mb-2 block tracking-[0.2em]">الدرجة</label>
+                                <input type="number" value={manualSubQuestion.marks} onChange={e => setManualSubQuestion({ ...manualSubQuestion, marks: Number(e.target.value) })} className="h-12 w-full bg-gray-50 rounded-xl border border-gray-100 px-4 text-center font-bold" />
+                               </div>
+                               <Button 
+                                 type="button"
+                                 onClick={() => {
+                                   if (!manualSubQuestion.question) {
+                                     toast.error('يرجى كتابة نص السؤال الفرعي');
+                                     return;
+                                   }
+                                   if (manualSubQuestion.options.some(o => !o.trim())) {
+                                     toast.error('يرجى ملء كافة الخيارات');
+                                     return;
+                                   }
+                                   setManualQuestion(prev => ({
+                                     ...prev,
+                                     subQuestions: [...(prev.subQuestions || []), { ...manualSubQuestion }]
+                                   }));
+                                   setManualSubQuestion({
+                                     question: '',
+                                     image: '',
+                                     options: ['', '', '', ''],
+                                     correctAnswer: 0,
+                                     marks: 5
+                                   });
+                                   toast.success('تم إضافة السؤال الفرعي');
+                                 }}
+                                 className="h-12 mt-6 flex-1 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-600 hover:text-white font-bold"
+                               >إضافة السؤال الفرعي للقائمة</Button>
+                            </div>
+                          </div>
+
+                          {manualQuestion.subQuestions && manualQuestion.subQuestions.length > 0 && (
+                            <div className="grid grid-cols-1 gap-3">
+                               {manualQuestion.subQuestions.map((sq, i) => (
+                                 <div key={i} className="flex items-center justify-between bg-white px-6 py-4 rounded-2xl border border-gray-100 shadow-sm group">
+                                    <div className="flex items-center gap-4">
+                                       <span className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center text-xs font-black">{i + 1}</span>
+                                       <span className="font-bold text-gray-700 text-sm truncate max-w-[300px]">{sq.question}</span>
+                                       <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100">{sq.marks} درجة</Badge>
+                                    </div>
+                                    <button 
+                                      type="button"
+                                      onClick={() => {
+                                        setManualQuestion(prev => ({
+                                          ...prev,
+                                          subQuestions: prev.subQuestions.filter((_, idx) => idx !== i)
+                                        }));
+                                      }}
+                                      className="text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                    >
+                                      <span className="material-symbols-outlined">delete</span>
+                                    </button>
+                                 </div>
+                               ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-4">
+                           <Button
+                              type="button"
+                              onClick={() => {
+                                if (!manualQuestion.question) {
+                                  toast.error('يرجى إدخال نص الفقرة الرئيسي');
+                                  return;
+                                }
+                                if (!manualQuestion.subQuestions || manualQuestion.subQuestions.length === 0) {
+                                  toast.error('يرجى إضافة سؤال فرعي واحد على الأقل للفقرة');
+                                  return;
+                                }
+                                
+                                // Calculate cumulative marks for the passage
+                                const totalPassageMarks = manualQuestion.subQuestions.reduce((acc, q) => acc + (q.marks || 0), 0);
+
+                                setExamForm(prev => ({
+                                  ...prev,
+                                  questions: [...prev.questions, { ...manualQuestion, marks: totalPassageMarks }]
+                                }));
+
+                                setManualQuestion({
+                                  type: 'mcq',
+                                  question: '',
+                                  image: '',
+                                  options: ['', '', '', ''],
+                                  correctAnswer: 0,
+                                  marks: 5,
+                                  subQuestions: []
+                                });
+                                toast.success('تم إضافة الفقرة بالكامل للاختبار');
+                              }}
+                              className="w-full h-16 rounded-2xl bg-[#005bbf] text-white font-black text-lg shadow-xl shadow-blue-100"
+                           >حفظ الفقرة وكافة أسئلتها</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
                         <Input 
-                          label="درجة السؤال" 
-                          type="number" 
-                          value={manualQuestion.marks} 
-                          onChange={e => setManualQuestion({ ...manualQuestion, marks: Number(e.target.value) })}
+                          label="نص السؤال (يدعم LaTeX)" 
+                          value={manualQuestion.question} 
+                          onChange={e => setManualQuestion({ ...manualQuestion, question: e.target.value })}
+                          placeholder="اكتب السؤال هنا... استخدم $$ للرموز الرياضية"
                           className="rounded-2xl border-gray-100 bg-gray-50/50"
                         />
-                      </div>
-                      <div className="flex-1 w-full pt-6">
-                        <Button
-                          type="button"
-                          onClick={() => {
-                            if (!manualQuestion.question && !manualQuestion.image) {
-                              toast.error('يرجى إدخال نص السؤال أو صورة');
-                              return;
-                            }
-                            if (manualQuestion.options.some(opt => !opt.trim())) {
-                              toast.error('يرجى ملء جميع الخيارات الأربعة');
-                              return;
-                            }
-                            setExamForm(prev => {
-                            let imageUrl = manualQuestion.image;
-                            if (imageUrl && typeof imageUrl === 'string') {
-                                // 1. Try to extract from [img]...[/img] (BBCode)
-                                const bbMatch = imageUrl.match(/\[img\]\s*(https?:\/\/[^\]\s]+)\s*\[\/img\]/i);
-                                // 2. Try to find any direct URL
-                                const rawMatch = imageUrl.match(/(https?:\/\/[^\s\]\)"']+)/);
-                                
-                                if (bbMatch && bbMatch[1]) {
-                                    imageUrl = bbMatch[1].trim();
-                                } else if (rawMatch && rawMatch[1]) {
-                                    imageUrl = rawMatch[1].trim();
+                        
+                        <Input 
+                          label="رابط صورة السؤال (اختياري)" 
+                          value={manualQuestion.image} 
+                          onChange={e => setManualQuestion({ ...manualQuestion, image: e.target.value })}
+                          placeholder="https://example.com/image.jpg"
+                          className="rounded-2xl border-gray-100 bg-gray-50/50"
+                        />
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {manualQuestion.options.map((opt, i) => (
+                            <div key={i} className="relative group">
+                              <Input 
+                                label={`الخيار ${i + 1}`} 
+                                value={opt} 
+                                onChange={e => {
+                                  const newOpts = [...manualQuestion.options];
+                                  newOpts[i] = e.target.value;
+                                  setManualQuestion({ ...manualQuestion, options: newOpts });
+                                }}
+                                placeholder={`اكتب الخيار ${i + 1} هنا...`}
+                                className={cn(
+                                  "rounded-2xl border-gray-100 bg-gray-50/50 pl-14",
+                                  manualQuestion.correctAnswer === i && "border-emerald-200 bg-emerald-50/30"
+                                )}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setManualQuestion({ ...manualQuestion, correctAnswer: i })}
+                                className={cn(
+                                  "absolute bottom-4 left-4 w-8 h-8 rounded-xl border flex items-center justify-center transition-all",
+                                  manualQuestion.correctAnswer === i 
+                                    ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-200" 
+                                    : "border-gray-200 text-gray-300 hover:border-emerald-300 hover:text-emerald-500"
+                                )}
+                              >
+                                <span className="material-symbols-outlined text-lg font-bold">check</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex gap-4 items-center flex-col sm:flex-row">
+                          <div className="flex-1 w-full">
+                            <Input 
+                              label="درجة السؤال" 
+                              type="number" 
+                              value={manualQuestion.marks} 
+                              onChange={e => setManualQuestion({ ...manualQuestion, marks: Number(e.target.value) })}
+                              className="rounded-2xl border-gray-100 bg-gray-50/50"
+                            />
+                          </div>
+                          <div className="flex-1 w-full pt-6">
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                if (!manualQuestion.question && !manualQuestion.image) {
+                                  toast.error('يرجى إدخال نص السؤال أو صورة');
+                                  return;
                                 }
-                            }
-                            const newQuestions = [...prev.questions, { ...manualQuestion, image: imageUrl }];
-                                return { ...prev, questions: newQuestions };
-                            });
-                            setManualQuestion({
-                              question: '',
-                              image: '',
-                              options: ['', '', '', ''],
-                              correctAnswer: 0,
-                              marks: 5
-                            });
-                            toast.success('تم إضافة السؤال للقائمة');
-                          }}
-                          className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center justify-center gap-3 shadow-xl shadow-emerald-200"
-                        >
-                          <span className="material-symbols-outlined">add_circle</span>
-                          حفظ وإضافة للسؤال القادم
-                        </Button>
-                      </div>
-                    </div>
+                                if (manualQuestion.options.some(opt => !opt.trim())) {
+                                  toast.error('يرجى ملء جميع الخيارات الأربعة');
+                                  return;
+                                }
+                                setExamForm(prev => {
+                                let imageUrl = manualQuestion.image;
+                                if (imageUrl && typeof imageUrl === 'string') {
+                                    // 1. Try to extract from [img]...[/img] (BBCode)
+                                    const bbMatch = imageUrl.match(/\[img\]\s*(https?:\/\/[^\]\s]+)\s*\[\/img\]/i);
+                                    // 2. Try to find any direct URL
+                                    const rawMatch = imageUrl.match(/(https?:\/\/[^\s\]\)"']+)/);
+                                    
+                                    if (bbMatch && bbMatch[1]) {
+                                        imageUrl = bbMatch[1].trim();
+                                    } else if (rawMatch && rawMatch[1]) {
+                                        imageUrl = rawMatch[1].trim();
+                                    }
+                                }
+                                const newQuestions = [...prev.questions, { ...manualQuestion, image: imageUrl }];
+                                    return { ...prev, questions: newQuestions };
+                                });
+                                setManualQuestion({
+                                  type: 'mcq',
+                                  question: '',
+                                  image: '',
+                                  options: ['', '', '', ''],
+                                  correctAnswer: 0,
+                                  marks: 5,
+                                  subQuestions: []
+                                });
+                                toast.success('تم إضافة السؤال للقائمة');
+                              }}
+                              className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center justify-center gap-3 shadow-xl shadow-emerald-200"
+                            >
+                              <span className="material-symbols-outlined">add_circle</span>
+                              حفظ وإضافة للسؤال القادم
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                </Card>
 

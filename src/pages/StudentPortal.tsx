@@ -38,7 +38,7 @@ export function StudentPortal() {
   const [isConfirmSubmitOpen, setIsConfirmSubmitOpen] = useState(false);
   const [examResult, setExamResult] = useState<any>(null);
   const [isReviewing, setIsReviewing] = useState(false);
-  const [examAnswers, setExamAnswers] = useState<Record<number, number>>({});
+  const [examAnswers, setExamAnswers] = useState<Record<string, number>>({});
   const [examStartTime, setExamStartTime] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [accessCodeInput, setAccessCodeInput] = useState('');
@@ -403,18 +403,39 @@ export function StudentPortal() {
         }
       }
 
-      const results = (questions || []).map((q: any, idx: number) => {
-        const isCorrect = examAnswers[idx] === q.correctAnswer;
-        if (isCorrect) {
-          score += Number(q.marks || 0);
+      const results: any[] = [];
+      (questions || []).forEach((q: any, idx: number) => {
+        if (q.type === 'passage' && q.subQuestions) {
+          q.subQuestions.forEach((sq: any, sIdx: number) => {
+            const compositeKey = `${idx}-${sIdx}`;
+            const isCorrect = examAnswers[compositeKey] === sq.correctAnswer;
+            if (isCorrect) {
+              score += Number(sq.marks || 0);
+            }
+            results.push({
+              questionIndex: compositeKey,
+              studentAnswer: examAnswers[compositeKey],
+              correctAnswer: sq.correctAnswer,
+              isCorrect,
+              isSubQuestion: true,
+              parentIndex: idx
+            });
+          });
+        } else {
+          const isCorrect = examAnswers[idx] === q.correctAnswer;
+          if (isCorrect) {
+            score += Number(q.marks || 0);
+          }
+          results.push({
+            questionIndex: idx,
+            studentAnswer: examAnswers[idx],
+            correctAnswer: q.correctAnswer,
+            isCorrect
+          });
         }
-        return {
-          questionIndex: idx,
-          studentAnswer: examAnswers[idx],
-          correctAnswer: q.correctAnswer,
-          isCorrect
-        };
       });
+
+      const scheduledEndTime = examStartTime ? examStartTime + (Number(selectedExam.duration || 60) * 60000) : Date.now();
 
       const resultData = {
         examId: selectedExam.id,
@@ -426,6 +447,7 @@ export function StudentPortal() {
         answers: examAnswers,
         resultsDetail: results,
         completedAt: serverTimestamp(),
+        scheduledEndTime, // Added this field
       };
 
       const docRef = await addDoc(collection(db, 'exam_results'), resultData);
@@ -1329,7 +1351,7 @@ export function StudentPortal() {
                           const result = examResults.find(r => r.examId === exam.id);
                           const durationMs = Number(exam.duration || 60) * 60 * 1000;
                           const isTimedOut = exam.startedAt && (Date.now() > (exam.startedAt.toMillis() + durationMs));
-                          const canReview = exam.status === 'ended' || isTimedOut;
+                          const canReview = exam.status === 'ended' || isTimedOut || (result?.scheduledEndTime && Date.now() >= result.scheduledEndTime);
 
                           return (
                             <div key={exam.id} className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl flex flex-col hover:bg-white hover:shadow-xl transition-all group">
@@ -1866,65 +1888,134 @@ export function StudentPortal() {
                   
                   if (questions && questions.length > 0) {
                     return questions.map((q: any, qIdx: number) => (
-                      <div key={qIdx} className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-[0_10px_50px_-15px_rgba(0,0,0,0.05)] border border-gray-100 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:border-blue-100 transition-colors">
-                        <div className="flex gap-6 items-start">
-                          <div className="w-12 h-12 rounded-2xl bg-gray-900 text-white flex items-center justify-center font-black text-xl shrink-0 shadow-lg shadow-gray-200">{qIdx + 1}</div>
-                          <div className="text-2xl font-black text-gray-900 leading-relaxed overflow-x-auto py-2 scrollbar-none flex-1">
-                            <span className="math-wrapper">
-                              <MathJax dynamic>
-                                {q.question}
-                              </MathJax>
-                            </span>
-                            {q.image && (
-                              <div className="mt-6 rounded-3xl overflow-hidden border border-gray-100 shadow-sm max-w-full relative group">
-                                <img 
-                                  src={q.image} 
-                                  alt="Question" 
-                                  className="w-full h-auto object-contain bg-white mx-auto max-h-[400px]" 
-                                  referrerPolicy="no-referrer"
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.onerror = null;
-                                    target.src = 'https://placehold.co/600x400?text=Error+Loading+Image';
-                                  }}
-                                />
-                                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                   <a href={q.image} target="_blank" rel="noreferrer" className="bg-white/90 backdrop-blur-sm text-black px-6 py-3 rounded-2xl font-bold text-sm shadow-xl">
-                                     تكبير الصورة
-                                   </a>
+                      <div key={qIdx} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {q.type === 'passage' ? (
+                          <div className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-[0_10px_50px_-15px_rgba(0,0,0,0.05)] border-2 border-emerald-100 space-y-8">
+                             <div className="flex gap-6 items-start">
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black text-xl shrink-0 shadow-lg shadow-emerald-200">
+                                   <span className="material-symbols-outlined">description</span>
                                 </div>
-                              </div>
-                            )}
+                                <div className="flex-1 space-y-6">
+                                   <div className="text-2xl font-black text-emerald-900 leading-relaxed overflow-x-auto py-2 scrollbar-none">
+                                      <span className="math-wrapper">
+                                        <MathJax dynamic>{q.question}</MathJax>
+                                      </span>
+                                   </div>
+                                   {q.image && (
+                                      <div className="rounded-3xl overflow-hidden border border-emerald-50">
+                                         <img src={q.image} alt="Passage" className="w-full h-auto object-contain max-h-[500px]" referrerPolicy="no-referrer" />
+                                      </div>
+                                   )}
+                                </div>
+                             </div>
+
+                             <div className="space-y-12 pr-6 border-r-2 border-emerald-50 mt-8">
+                                {(q.subQuestions || []).map((sq: any, sIdx: number) => (
+                                  <div key={sIdx} className="space-y-6 bg-emerald-50/20 p-8 rounded-[2.5rem] border border-emerald-100/50">
+                                     <div className="flex gap-4 items-start">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-sm shrink-0">{qIdx + 1}.{sIdx + 1}</div>
+                                        <div className="text-xl font-bold text-gray-800 leading-relaxed">
+                                           <span className="math-wrapper">
+                                              <MathJax dynamic>{sq.question}</MathJax>
+                                           </span>
+                                        </div>
+                                     </div>
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {(sq.options || []).map((opt: string, oIdx: number) => {
+                                          const compositeKey = `${qIdx}-${sIdx}`;
+                                          const isSelected = examAnswers[compositeKey] === oIdx;
+                                          return (
+                                            <button 
+                                              key={oIdx} 
+                                              onClick={() => setExamAnswers({ ...examAnswers, [compositeKey]: oIdx })}
+                                              className={cn(
+                                                "group flex items-center gap-4 p-5 rounded-2xl text-right transition-all border-2",
+                                                isSelected 
+                                                  ? "bg-emerald-50 border-emerald-500 text-emerald-700" 
+                                                  : "bg-white border-transparent hover:bg-emerald-50/30 text-gray-600"
+                                              )}
+                                            >
+                                              <div className={cn(
+                                                "w-8 h-8 rounded-full border-4 flex items-center justify-center transition-all shrink-0",
+                                                isSelected ? "border-emerald-500 bg-emerald-500" : "border-gray-200"
+                                              )}>
+                                                {isSelected && <div className="w-2 h-2 rounded-full bg-white shadow-sm" />}
+                                              </div>
+                                              <div className="font-bold text-sm">
+                                                <span className="math-wrapper">
+                                                  <MathJax dynamic>{opt}</MathJax>
+                                                </span>
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                     </div>
+                                  </div>
+                                ))}
+                             </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {(q.options || []).map((opt: string, oIdx: number) => (
-                            <button 
-                              key={oIdx} 
-                              onClick={() => setExamAnswers({ ...examAnswers, [qIdx]: oIdx })}
-                              className={cn(
-                                "group flex items-center gap-4 p-5 rounded-2xl text-right transition-all border-2",
-                                examAnswers[qIdx] === oIdx 
-                                  ? "bg-blue-50/50 border-[#005bbf] text-[#005bbf]" 
-                                  : "bg-white border-transparent hover:bg-gray-50 text-gray-600"
-                              )}
-                            >
-                              <div className={cn(
-                                "w-10 h-10 rounded-full border-4 flex items-center justify-center transition-all shrink-0",
-                                examAnswers[qIdx] === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-200"
-                              )}>
-                                {examAnswers[qIdx] === oIdx && <div className="w-2.5 h-2.5 rounded-full bg-white shadow-sm" />}
-                              </div>
-                              <div className="font-bold text-lg overflow-x-auto py-1 scrollbar-none flex-1">
+                        ) : (
+                          <div className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-[0_10px_50px_-15px_rgba(0,0,0,0.05)] border border-gray-100 space-y-8 hover:border-blue-100 transition-colors">
+                            <div className="flex gap-6 items-start">
+                              <div className="w-12 h-12 rounded-2xl bg-gray-900 text-white flex items-center justify-center font-black text-xl shrink-0 shadow-lg shadow-gray-200">{qIdx + 1}</div>
+                              <div className="text-2xl font-black text-gray-900 leading-relaxed overflow-x-auto py-2 scrollbar-none flex-1">
                                 <span className="math-wrapper">
                                   <MathJax dynamic>
-                                    {opt}
+                                    {q.question}
                                   </MathJax>
                                 </span>
+                                {q.image && (
+                                  <div className="mt-6 rounded-3xl overflow-hidden border border-gray-100 shadow-sm max-w-full relative group">
+                                    <img 
+                                      src={q.image} 
+                                      alt="Question" 
+                                      className="w-full h-auto object-contain bg-white mx-auto max-h-[400px]" 
+                                      referrerPolicy="no-referrer"
+                                      onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        target.onerror = null;
+                                        target.src = 'https://placehold.co/600x400?text=Error+Loading+Image';
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <a href={q.image} target="_blank" rel="noreferrer" className="bg-white/90 backdrop-blur-sm text-black px-6 py-3 rounded-2xl font-bold text-sm shadow-xl">
+                                        تكبير الصورة
+                                      </a>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            </button>
-                          ))}
-                        </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {(q.options || []).map((opt: string, oIdx: number) => (
+                                <button 
+                                  key={oIdx} 
+                                  onClick={() => setExamAnswers({ ...examAnswers, [qIdx]: oIdx })}
+                                  className={cn(
+                                    "group flex items-center gap-4 p-5 rounded-2xl text-right transition-all border-2",
+                                    examAnswers[qIdx] === oIdx 
+                                      ? "bg-blue-50/50 border-[#005bbf] text-[#005bbf]" 
+                                      : "bg-white border-transparent hover:bg-gray-50 text-gray-600"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-full border-4 flex items-center justify-center transition-all shrink-0",
+                                    examAnswers[qIdx] === oIdx ? "border-[#005bbf] bg-[#005bbf]" : "border-gray-200"
+                                  )}>
+                                    {examAnswers[qIdx] === oIdx && <div className="w-2.5 h-2.5 rounded-full bg-white shadow-sm" />}
+                                  </div>
+                                  <div className="font-bold text-lg overflow-x-auto py-1 scrollbar-none flex-1">
+                                    <span className="math-wrapper">
+                                      <MathJax dynamic>
+                                        {opt}
+                                      </MathJax>
+                                    </span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ));
                   } else {
@@ -2003,15 +2094,27 @@ export function StudentPortal() {
                </div>
 
                <div className="flex flex-col gap-4">
-                  <button 
-                    onClick={() => {
-                      setIsReviewing(true);
-                    }} 
-                    className="w-full h-16 rounded-2xl bg-emerald-600 text-white font-black text-lg shadow-xl shadow-emerald-200 active:scale-95 transition-all flex items-center justify-center gap-3"
-                  >
-                    <span className="material-symbols-outlined">fact_check</span>
-                    مراجعة وتصحيح إجاباتك
-                  </button>
+                  {(!examResult.scheduledEndTime || Date.now() >= examResult.scheduledEndTime) ? (
+                    <button 
+                      onClick={() => {
+                        setIsReviewing(true);
+                      }} 
+                      className="w-full h-16 rounded-2xl bg-emerald-600 text-white font-black text-lg shadow-xl shadow-emerald-200 active:scale-95 transition-all flex items-center justify-center gap-3"
+                    >
+                      <span className="material-symbols-outlined">fact_check</span>
+                      مراجعة وتصحيح إجاباتك
+                    </button>
+                  ) : (
+                    <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 space-y-3">
+                       <div className="flex items-center justify-center gap-2 text-[#005bbf]">
+                          <span className="material-symbols-outlined font-bold text-xl">schedule</span>
+                          <span className="font-black text-sm">مراجعة الإجابات ستتاح فور انتهاء الوقت</span>
+                       </div>
+                       <div className="text-[10px] text-blue-400 font-black bg-white/80 py-1 px-4 rounded-full inline-block border border-blue-50">
+                          متوفر عند الساعة {new Date(examResult.scheduledEndTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                       </div>
+                    </div>
+                  )}
                   <button 
                     onClick={() => {
                       setExamResult(null);
@@ -2055,6 +2158,93 @@ export function StudentPortal() {
             <main className="max-w-3xl mx-auto px-6 py-10 pb-32">
               <div className="space-y-12">
                 {(examResult.questions || []).map((q: any, qIdx: number) => {
+                  if (q.type === 'passage') {
+                    return (
+                      <div key={qIdx} className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-[0_10px_50px_-15px_rgba(0,0,0,0.05)] border-2 border-emerald-100 space-y-8">
+                         <div className="flex gap-6 items-start">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black text-xl shrink-0 shadow-lg shadow-emerald-200">
+                               <span className="material-symbols-outlined">description</span>
+                            </div>
+                            <div className="flex-1 space-y-6">
+                               <div className="text-2xl font-black text-emerald-900 leading-relaxed">
+                                  <span className="math-wrapper">
+                                    <MathJax dynamic>{q.question}</MathJax>
+                                  </span>
+                               </div>
+                               {q.image && (
+                                  <div className="rounded-3xl overflow-hidden border border-emerald-50">
+                                     <img src={q.image} alt="Passage" className="w-full h-auto object-contain max-h-[500px]" referrerPolicy="no-referrer" />
+                                  </div>
+                               )}
+                            </div>
+                         </div>
+
+                         <div className="space-y-12 pr-6 border-r-2 border-emerald-50 mt-8">
+                            {(q.subQuestions || []).map((sq: any, sIdx: number) => {
+                              const compositeKey = `${qIdx}-${sIdx}`;
+                              const studentAnswerIdx = examResult.answers[compositeKey];
+                              const correctAnswerIdx = sq.correctAnswer;
+                              const isCorrect = studentAnswerIdx === correctAnswerIdx;
+
+                              return (
+                                <div key={sIdx} className={cn(
+                                  "bg-white p-8 rounded-[2.5rem] border-2 space-y-6",
+                                  isCorrect ? "border-green-50" : "border-red-50"
+                                )}>
+                                   <div className="flex gap-4 items-start">
+                                      <div className={cn(
+                                        "w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0",
+                                        isCorrect ? "bg-green-600 text-white" : "bg-red-600 text-white"
+                                      )}>{qIdx + 1}.{sIdx + 1}</div>
+                                      <div className="text-xl font-bold text-gray-800 leading-relaxed">
+                                         <span className="math-wrapper">
+                                            <MathJax dynamic>{sq.question}</MathJax>
+                                         </span>
+                                      </div>
+                                   </div>
+                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      {(sq.options || []).map((opt: string, oIdx: number) => {
+                                        const isStudentSelected = studentAnswerIdx === oIdx;
+                                        const isCorrectOption = correctAnswerIdx === oIdx;
+
+                                        return (
+                                          <div 
+                                            key={oIdx} 
+                                            className={cn(
+                                              "flex items-center gap-4 p-5 rounded-2xl text-right border-2 transition-all",
+                                              isCorrectOption ? "bg-green-50 border-green-500 text-green-700" : 
+                                              isStudentSelected && !isCorrectOption ? "bg-red-50 border-red-500 text-red-700" :
+                                              "bg-white border-transparent text-gray-400 opacity-60"
+                                            )}
+                                          >
+                                            <div className={cn(
+                                              "w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0",
+                                              isCorrectOption ? "border-green-500 bg-green-500" : 
+                                              isStudentSelected ? "border-red-500 bg-red-500" : "border-gray-100"
+                                            )}>
+                                              {(isCorrectOption || isStudentSelected) && (
+                                                <span className="material-symbols-outlined text-white text-[10px]">
+                                                  {isCorrectOption ? 'check' : 'close'}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="font-bold text-sm">
+                                              <span className="math-wrapper">
+                                                <MathJax dynamic>{opt}</MathJax>
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                   </div>
+                                </div>
+                              );
+                            })}
+                         </div>
+                      </div>
+                    );
+                  }
+
                   const studentAnswerIdx = examResult.answers[qIdx];
                   const correctAnswerIdx = q.correctAnswer;
                   const isCorrect = studentAnswerIdx === correctAnswerIdx;
