@@ -484,26 +484,35 @@ const TeacherPortal = () => {
                </Card>
 
                {/* 3. Manual Question Adder */}
-               <Card className="p-10 rounded-[3rem] border-none shadow-[0_20px_50px_-20_rgba(0,0,0,0.05)] bg-white space-y-8">
+               <Card className="p-10 rounded-[3rem] border-none shadow-[0_20px_50px_-20px_rgba(0,0,0,0.05)] bg-white space-y-8">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-r-4 border-emerald-600 pr-6">
-                    <h3 className="text-2xl font-black text-gray-900">إضافة سؤال يدوياً</h3>
+                    <div className="space-y-1">
+                       <h3 className="text-2xl font-black text-gray-900">إضافة سؤال يدوياً</h3>
+                       <p className="text-xs text-emerald-600 font-bold uppercase tracking-widest">اختر نوع السؤال أولاً للبدء</p>
+                    </div>
                     <div className="flex bg-gray-100 p-1.5 rounded-2xl gap-2">
-                       <button 
-                         type="button"
-                         onClick={() => setManualQuestion({ ...manualQuestion, type: 'mcq' })}
-                         className={cn(
-                           "px-6 py-2 rounded-xl text-sm font-black transition-all",
-                           manualQuestion.type === 'mcq' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-400 hover:text-gray-600"
-                         )}
-                       >سؤال فردي</button>
-                       <button 
-                         type="button"
-                         onClick={() => setManualQuestion({ ...manualQuestion, type: 'passage' })}
-                         className={cn(
-                           "px-6 py-2 rounded-xl text-sm font-black transition-all",
-                           manualQuestion.type === 'passage' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-400 hover:text-gray-600"
-                         )}
-                       >فقرة / مجموعة أسئلة</button>
+                        <button 
+                          type="button"
+                          onClick={() => setManualQuestion({ ...manualQuestion, type: 'mcq' })}
+                          className={cn(
+                            "px-6 py-2 rounded-xl text-sm font-black transition-all flex items-center gap-2",
+                            manualQuestion.type === 'mcq' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                          )}
+                        >
+                          <span className="material-symbols-outlined text-lg">quiz</span>
+                          سؤال فردي
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setManualQuestion({ ...manualQuestion, type: 'passage' })}
+                          className={cn(
+                            "px-6 py-2 rounded-xl text-sm font-black transition-all flex items-center gap-2",
+                            manualQuestion.type === 'passage' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                          )}
+                        >
+                          <span className="material-symbols-outlined text-lg">description</span>
+                          فقرة / مجموعة أسئلة
+                        </button>
                     </div>
                   </div>
 
@@ -802,8 +811,89 @@ const TeacherPortal = () => {
                     </div>
 
                     <div className="grid grid-cols-1 gap-10">
-                       {examForm.questions.map((q, idx) => (
-                         <div key={idx} className="bg-white p-10 rounded-[3.5rem] shadow-[0_15px_60px_-20px_rgba(0,0,0,0.06)] border border-gray-50 space-y-8 hover:shadow-2xl transition-all group overflow-hidden relative">
+                       {examForm.questions.map((q, idx) => {
+                         if (q.type === 'passage') {
+                           return (
+                             <div key={idx} className="bg-white p-10 rounded-[3.5rem] shadow-[0_15px_60px_-20px_rgba(0,0,0,0.06)] border-2 border-emerald-50 space-y-8 hover:shadow-2xl transition-all group overflow-hidden relative">
+                               <div className="absolute top-0 right-0 w-2 h-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                               
+                               <div className="flex flex-col md:flex-row items-start justify-between gap-8">
+                                  <div className="flex items-start gap-8 flex-1">
+                                     <div className="w-14 h-14 rounded-[1.5rem] bg-emerald-600 text-white flex items-center justify-center font-black text-2xl shrink-0 mt-1 shadow-xl">
+                                       {idx + 1}
+                                     </div>
+                                     <div className="flex-1 space-y-6 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                           <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100">سؤال فقرة</Badge>
+                                           <Badge className="bg-white text-gray-400 border-gray-100">{(q.subQuestions || []).length} أسئلة فرعية</Badge>
+                                        </div>
+                                        {q.image && (
+                                          <div className="rounded-[2.5rem] overflow-hidden border-4 border-emerald-50/50 max-w-lg bg-white shadow-inner relative group">
+                                             <img src={q.image} alt="Passage" className="w-full h-auto object-contain max-h-[350px]" referrerPolicy="no-referrer" />
+                                          </div>
+                                        )}
+                                        <div className="text-2xl font-bold text-emerald-900 leading-relaxed break-words">
+                                           <span className="math-wrapper">
+                                             <MathJax dynamic>{q.question}</MathJax>
+                                           </span>
+                                        </div>
+                                     </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-3 shrink-0 self-end md:self-start">
+                                     <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex flex-col items-center">
+                                        <span className="text-[9px] font-black text-emerald-400 uppercase mb-1">إجمالي الدرجة</span>
+                                        <span className="font-black text-xl text-emerald-600">{q.marks}</span>
+                                     </div>
+                                     <button 
+                                       type="button"
+                                       onClick={() => {
+                                         const updated = examForm.questions.filter((_, i) => i !== idx);
+                                         setExamForm({ ...examForm, questions: updated });
+                                       }}
+                                       className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm border border-red-100"
+                                     >
+                                       <span className="material-symbols-outlined text-2xl">delete</span>
+                                     </button>
+                                  </div>
+                               </div>
+
+                               <div className="space-y-6 pr-6 border-r-2 border-emerald-50 mt-8">
+                                  {(q.subQuestions || []).map((sq: any, sIdx: number) => (
+                                    <div key={sIdx} className="bg-gray-50/50 p-6 rounded-[2.5rem] border border-gray-100 space-y-6">
+                                       <div className="flex gap-4 items-start">
+                                          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-sm shrink-0">{idx + 1}.{sIdx + 1}</div>
+                                          <div className="text-xl font-bold text-gray-800 leading-relaxed">
+                                             <span className="math-wrapper">
+                                                <MathJax dynamic>{sq.question}</MathJax>
+                                             </span>
+                                          </div>
+                                          <div className="mr-auto">
+                                             <Badge className="bg-white text-emerald-600 border-emerald-100">{sq.marks} درجة</Badge>
+                                          </div>
+                                       </div>
+                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          {(sq.options || []).map((opt: string, oIdx: number) => (
+                                            <div key={oIdx} className={cn(
+                                              "p-4 rounded-xl border flex items-center gap-4 text-sm font-bold",
+                                              sq.correctAnswer === oIdx ? "bg-emerald-50 border-emerald-500 text-emerald-700" : "bg-white border-gray-100 text-gray-400"
+                                            )}>
+                                               <div className={cn("w-6 h-6 rounded-lg border flex items-center justify-center", sq.correctAnswer === oIdx ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-200")}>
+                                                  {sq.correctAnswer === oIdx && <span className="material-symbols-outlined text-[12px]">check</span>}
+                                               </div>
+                                               <span className="math-wrapper"><MathJax dynamic>{opt}</MathJax></span>
+                                            </div>
+                                          ))}
+                                       </div>
+                                    </div>
+                                  ))}
+                               </div>
+                             </div>
+                           );
+                         }
+
+                         return (
+                           <div key={idx} className="bg-white p-10 rounded-[3.5rem] shadow-[0_15px_60px_-20px_rgba(0,0,0,0.06)] border border-gray-50 space-y-8 hover:shadow-2xl transition-all group overflow-hidden relative">
                             <div className="absolute top-0 right-0 w-2 h-full bg-[#005bbf] opacity-0 group-hover:opacity-100 transition-opacity" />
                             
                             <div className="flex flex-col md:flex-row items-start justify-between gap-8">
@@ -896,8 +986,9 @@ const TeacherPortal = () => {
                                  </div>
                                ))}
                             </div>
-                         </div>
-                       ))}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="pt-20">
