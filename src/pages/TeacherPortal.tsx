@@ -201,13 +201,45 @@ const TeacherPortal = () => {
             throw new Error('لم يتم العثور على مصفوفة أسئلة في الـ JSON المدخل.');
           }
 
-          finalQuestions = items.map((item: any) => ({
-            question: item.q || item.question || '',
-            image: item.i || item.img || item.image || null,
-            options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
-            correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
-            marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
-          }));
+          finalQuestions = items.map((item: any) => {
+            let imageUrl = item.i || item.img || item.image || null;
+            if (imageUrl && typeof imageUrl === 'string') {
+                const bbMatch = imageUrl.match(/\[img\]\s*(https?:\/\/[^\]\s]+)\s*\[\/img\]/i);
+                const rawMatch = imageUrl.match(/(https?:\/\/[^\s\]\)"']+)/);
+                if (bbMatch && bbMatch[1]) imageUrl = bbMatch[1].trim();
+                else if (rawMatch && rawMatch[1]) imageUrl = rawMatch[1].trim();
+            }
+
+            const type = item.type || (item.sq ? 'passage' : 'mcq');
+
+            if (type === 'passage') {
+                const subQs = (item.sq || item.subQuestions || []).map((sq: any) => ({
+                    question: sq.q || sq.question || '',
+                    options: Array.isArray(sq.o || sq.options) ? (sq.o || sq.options) : [],
+                    correctAnswer: typeof sq.c !== 'undefined' ? Number(sq.c) : 0,
+                    marks: Number(sq.m || sq.marks || 2)
+                }));
+                
+                const totalMarks = subQs.reduce((acc: number, s: any) => acc + s.marks, 0);
+
+                return {
+                    type: 'passage',
+                    question: item.q || item.question || '',
+                    image: imageUrl,
+                    subQuestions: subQs,
+                    marks: totalMarks
+                };
+            }
+
+            return {
+                type: 'mcq',
+                question: item.q || item.question || '',
+                image: imageUrl,
+                options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
+                correctAnswer: typeof item.c !== 'undefined' ? Number(item.c) : (typeof item.correctAnswer !== 'undefined' ? Number(item.correctAnswer) : 0),
+                marks: Number(item.m || item.marks || (Math.round((Number(examForm.totalMarks) / items.length) * 10) / 10 || 0))
+            };
+          });
         } catch (err: any) {
           toast.error(`حدث خطأ أثناء قراءة الـ JSON تلقائياً: ${err.message}`);
           return; // Stop saving if auto-parse was intended but failed
@@ -386,27 +418,40 @@ const TeacherPortal = () => {
                           onClick={() => {
                               const instructions = `سأرسل لك صورة لاختبار أو مجموعة أسئلة. وظيفتك هي تحويلها إلى ملف JSON بدقة عالية جداً.
 الأساسيات:
-1. استخرج الأسئلة والخيارات الأربعة لكل سؤال.
-2. استخدم لغة LaTeX لكافة المعادلات، الرموز، الكسور، والجذور.
-3. هام جداً: لا تضع نصاً عربياً داخل علامات الدولار $$. ضع النص العربي قبلها أو بعدها.
-4. هام جداً: استخدم علامة الدولار المزدوجة $$ قبل وبعد أي كسر أو رمز رياضي ليظهر بشكل عمودي منسق واحترافي.
-5. المواد العلمية (فيزياء، أحياء..): إذا وجد رسم أو رمز معقد، ضعه في حقل "i" كرابط صورة (مثلاً من imgbb).
-6. التنسيق هو JSON ARRAY (قائمة).
-7. حدد رقم الإجابة الصحيحة في الحقل "c" (0 للأول، 1 للثاني...).
-8. ضع الدرجة الافتراضية 5 في "m".
+1. استخرج الأسئلة والخيارات لكل سؤال.
+2. يدعم النظام نوعين من الأسئلة: 
+   - سؤال فردي ("type": "mcq")
+   - سؤال مجمع/فقرة ("type": "passage") يحتوي على أسئلة فرعية.
+3. استخدم لغة LaTeX لكافة المعادلات، الرموز، الكسور، والجذور (مثلاً: $$ \\frac{x}{y} $$).
+4. الروابط: إذا وجد رسم، ضعه في حقل "i".
+5. التنسيق هو JSON ARRAY (قائمة).
 
-مثال للتنسيق المطلوب:
-[
-  {
-    "q": "أوجد قيمة النهاية: $$ \\lim_{x \\to 2} \\frac{x^2 - 6x}{x^2+x-12} $$",
-    "o": ["$$ \\frac{5}{7} $$", "$$ \\frac{1}{7} $$", "-1", "-5"],
-    "c": 0,
-    "m": 5,
-    "i": "https://i.ibb.co/..."
-  }
-]`;
+هيكل السؤال الفردي (MCQ):
+{
+  "type": "mcq",
+  "q": "نص السؤال هنا",
+  "o": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
+  "c": 0, (رقم الإجابة الصحيحة تبدأ من 0)
+  "m": 5 (الدرجة)
+}
+
+هيكل السؤال المجمع (Passage):
+{
+  "type": "passage",
+  "q": "نص الفقرة أو رأس السؤال المجمع هنا",
+  "sq": [ (قائمة الأسئلة الفرعية)
+    {
+      "q": "السؤال الفرعي الأول",
+      "o": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
+      "c": 1,
+      "m": 2
+    }
+  ]
+}
+
+هام: تأكد من أن الـ JSON صالح وقابل للقراءة.`;
                               navigator.clipboard.writeText(instructions);
-                              toast.success('تم نسخ التعليمات.. أرسلها الآن للـ AI مع صورة الامتحان');
+                              toast.success('تم نسخ التعليمات المحدثة.. أرسلها الآن للـ AI');
                           }}
                         >
                           <span className="material-symbols-outlined text-2xl">content_copy</span>
@@ -446,18 +491,35 @@ const TeacherPortal = () => {
                             const normalized = items.map((item: any) => {
                                 let imageUrl = item.i || item.img || item.image || null;
                                 if (imageUrl && typeof imageUrl === 'string') {
-                                    // 1. Try to extract from [img]...[/img] (BBCode)
                                     const bbMatch = imageUrl.match(/\[img\]\s*(https?:\/\/[^\]\s]+)\s*\[\/img\]/i);
-                                    // 2. Try to extract from Markdown (url) or general URL
                                     const rawMatch = imageUrl.match(/(https?:\/\/[^\s\]\)"']+)/);
-                                    
-                                    if (bbMatch && bbMatch[1]) {
-                                        imageUrl = bbMatch[1].trim();
-                                    } else if (rawMatch && rawMatch[1]) {
-                                        imageUrl = rawMatch[1].trim();
-                                    }
+                                    if (bbMatch && bbMatch[1]) imageUrl = bbMatch[1].trim();
+                                    else if (rawMatch && rawMatch[1]) imageUrl = rawMatch[1].trim();
                                 }
+
+                                const type = item.type || (item.sq ? 'passage' : 'mcq');
+
+                                if (type === 'passage') {
+                                    const subQs = (item.sq || item.subQuestions || []).map((sq: any) => ({
+                                        question: sq.q || sq.question || '',
+                                        options: Array.isArray(sq.o || sq.options) ? (sq.o || sq.options) : [],
+                                        correctAnswer: typeof sq.c !== 'undefined' ? Number(sq.c) : 0,
+                                        marks: Number(sq.m || sq.marks || 2)
+                                    }));
+                                    
+                                    const totalMarks = subQs.reduce((acc: number, s: any) => acc + s.marks, 0);
+
+                                    return {
+                                        type: 'passage',
+                                        question: item.q || item.question || '',
+                                        image: imageUrl,
+                                        subQuestions: subQs,
+                                        marks: totalMarks
+                                    };
+                                }
+
                                 return {
+                                    type: 'mcq',
                                     question: item.q || item.question || '',
                                     image: imageUrl,
                                     options: Array.isArray(item.o || item.options || item.a) ? (item.o || item.options || item.a) : [],
