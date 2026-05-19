@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, setDoc, addDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Grade, Schedule, Group, Teacher } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
@@ -34,6 +34,8 @@ export function StudentPortal() {
   const [examResults, setExamResults] = useState<any[]>([]);
   const [selectedExam, setSelectedExam] = useState<any>(null);
   const [isTakingExam, setIsTakingExam] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmSubmitOpen, setIsConfirmSubmitOpen] = useState(false);
   const [examResult, setExamResult] = useState<any>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [examAnswers, setExamAnswers] = useState<Record<number, number>>({});
@@ -207,6 +209,32 @@ export function StudentPortal() {
     }
   };
 
+  const formatDateValue = (dateValue: any) => {
+    if (!dateValue) return '';
+    
+    // If it's a Firestore Timestamp
+    if (dateValue && typeof dateValue.toMillis === 'function') {
+      return new Date(dateValue.toMillis()).toLocaleDateString('ar-EG', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+
+    // If it's a string from the date input (YYYY-MM-DD or similar)
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return dateValue;
+      return date.toLocaleDateString('ar-EG', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (e) {
+      return dateValue;
+    }
+  };
+
   const getDayArabic = (day: string) => {
     const labels: Record<string, string> = {
       'Saturday': 'السبت', 'Sunday': 'الأحد', 'Monday': 'الاثنين', 'Tuesday': 'الثلاثاء', 
@@ -307,22 +335,46 @@ export function StudentPortal() {
     }
   };
 
+  // Watch for global exam status changes (e.g. teacher ending the exam)
+  useEffect(() => {
+    if (!selectedExam?.id || !isTakingExam) return;
+    
+    const unsub = onSnapshot(doc(db, 'exams', selectedExam.id), (docSnap) => {
+      const data = docSnap.data();
+      if (docSnap.exists() && data) {
+        // If teacher ended the exam globally, force submit
+        if (data.status === 'ended' && isTakingExam && !isSubmitting) {
+           toast.error('قام المعلم بإنهاء الاختبار للجميع. يتم الآن تسليم إجاباتك...');
+           handleSubmitExam();
+        }
+      }
+    });
+    
+    return unsub;
+  }, [selectedExam?.id, isTakingExam, isSubmitting]);
+
   // Exam timer logic
   useEffect(() => {
-    if (!isTakingExam || !selectedExam || !timeLeft) return;
+    if (!isTakingExam || !selectedExam || timeLeft === null) return;
 
     if (timeLeft <= 0) {
-      toast.error('انتهى وقت الاختبار!');
-      handleSubmitExam();
+      if (!isSubmitting) {
+        toast.error('انتهى وقت الاختبار! جاري التسليم تلقائياً...');
+        handleSubmitExam();
+      }
       return;
     }
 
     const timer = setInterval(() => {
-      setTimeLeft(prev => (prev !== null ? prev - 1 : null));
+      setTimeLeft(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isTakingExam, timeLeft]);
+  }, [isTakingExam, timeLeft, isSubmitting]);
 
   const formatTimeLeft = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -332,10 +384,12 @@ export function StudentPortal() {
   };
 
   const handleSubmitExam = async () => {
-    if (!selectedExam) return;
+    if (!selectedExam || isSubmitting) return;
 
     try {
-      setLoading(true);
+      setIsSubmitting(true);
+      const loadingToast = toast.loading('جاري تسليم الإجابات...');
+      
       // Calculate score
       let score = 0;
       let questions = selectedExam.questions || [];
@@ -376,16 +430,18 @@ export function StudentPortal() {
 
       const docRef = await addDoc(collection(db, 'exam_results'), resultData);
       
+      toast.dismiss();
       setExamResult({ id: docRef.id, ...resultData, questions });
       toast.success(`تم تسليم الاختبار بنجاح! درجتك: ${score}/${selectedExam.totalMarks}`);
       setIsTakingExam(false);
       setTimeLeft(null);
     } catch (error) {
+      toast.dismiss();
       console.error('Error submitting exam:', error);
       handleFirestoreError(error, OperationType.CREATE, 'exam_results');
       toast.error('حدث خطأ أثناء تسليم الاختبار. يرجى المحاولة مرة أخرى.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -1271,6 +1327,10 @@ export function StudentPortal() {
                       ) : (
                         exams.map(exam => {
                           const result = examResults.find(r => r.examId === exam.id);
+                          const durationMs = Number(exam.duration || 60) * 60 * 1000;
+                          const isTimedOut = exam.startedAt && (Date.now() > (exam.startedAt.toMillis() + durationMs));
+                          const canReview = exam.status === 'ended' || isTimedOut;
+
                           return (
                             <div key={exam.id} className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl flex flex-col hover:bg-white hover:shadow-xl transition-all group">
                                <div className="flex justify-between items-start mb-6">
@@ -1279,7 +1339,7 @@ export function StudentPortal() {
                                   </div>
                                   <div className="flex flex-col items-end gap-1">
                                     <span className="text-[10px] font-black text-gray-400 uppercase bg-white px-3 py-1 rounded-full">{exam.duration} دقيقة</span>
-                                    {exam.status === 'active' && (
+                                    {exam.status === 'active' && !isTimedOut && (
                                       <span className="text-[9px] font-black text-green-500 flex items-center gap-1 animate-pulse">
                                          <span className="w-1 h-1 bg-green-500 rounded-full"></span>
                                          قيد التشغيل
@@ -1288,10 +1348,18 @@ export function StudentPortal() {
                                   </div>
                                </div>
                                <h4 className="text-lg font-bold text-gray-900 mb-2 truncate">{exam.title}</h4>
-                               <p className="text-xs text-gray-400 font-bold mb-6 flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-sm">person</span>
-                                  {exam.teacherName}
-                               </p>
+                               <div className="flex flex-col gap-1.5 mb-6">
+                                 <p className="text-[11px] text-gray-400 font-bold flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-sm opacity-60">person</span>
+                                    {exam.teacherName}
+                                 </p>
+                                 {(exam.date || exam.createdAt) && (
+                                   <p className="text-[11px] text-[#005bbf] font-black flex items-center gap-2">
+                                      <span className="material-symbols-outlined text-sm font-black">calendar_today</span>
+                                      {formatDateValue(exam.date || exam.createdAt)}
+                                   </p>
+                                 )}
+                               </div>
                                
                                {result ? (
                                  <div className="mt-auto space-y-3">
@@ -1299,7 +1367,7 @@ export function StudentPortal() {
                                       <span>درجتك:</span>
                                       <span className="text-sm font-black">{result.score} / {exam.totalMarks}</span>
                                    </div>
-                                   {exam.status === 'ended' ? (
+                                   {canReview ? (
                                       <button
                                         onClick={() => {
                                           setExamResult({...result, questions: exam.questions});
@@ -1316,21 +1384,21 @@ export function StudentPortal() {
                                ) : (
                                  <button
                                    onClick={() => {
-                                     if (exam.status !== 'active') {
+                                     if (exam.status !== 'active' || isTimedOut) {
                                        toast.error('عذراً، هذا الاختبار لم يبدأ بعد أو انتهى وقته.');
                                        return;
                                      }
                                      setSelectedExam(exam);
                                    }}
-                                   disabled={exam.status !== 'active'}
+                                   disabled={exam.status !== 'active' || isTimedOut}
                                    className={cn(
                                      "mt-auto h-12 rounded-2xl text-sm font-black transition-all shadow-sm",
-                                     exam.status === 'active' 
+                                     (exam.status === 'active' && !isTimedOut)
                                       ? "bg-white border border-blue-100 text-[#005bbf] hover:bg-[#005bbf] hover:text-white" 
                                       : "bg-gray-100 text-gray-400 cursor-not-allowed border-none"
                                    )}
                                  >
-                                   {exam.status === 'active' ? 'دخول الاختبار' : 'غير متاح حالياً'}
+                                   {(exam.status === 'active' && !isTimedOut) ? 'دخول الاختبار' : 'غير متاح حالياً'}
                                  </button>
                                )}
                             </div>
@@ -1661,6 +1729,67 @@ export function StudentPortal() {
                     if (accessCodeInput.trim().toUpperCase() === (selectedExam.accessCode || '').toUpperCase()) {
                       toast.success('تم التحقق بنجاح! جاري تحميل الاختبار...');
                       
+                      // Logic to link student to teacher's first group if they don't have one
+                      const linkToTeacher = async () => {
+                        try {
+                          if (user && selectedExam.teacherId) {
+                            // Find a group for this teacher and grade
+                            const groupQuery = query(
+                              collection(db, 'groups'), 
+                              where('teacherId', '==', selectedExam.teacherId),
+                              where('gradeId', '==', selectedExam.gradeId)
+                            );
+                            const groupSnap = await getDocs(groupQuery);
+                            
+                            let targetGroupId = '';
+                            if (!groupSnap.empty) {
+                              targetGroupId = groupSnap.docs[0].id;
+                            } else {
+                              // Fallback to any group of this teacher if no group for this grade
+                              const anyGroupQuery = query(
+                                collection(db, 'groups'),
+                                where('teacherId', '==', selectedExam.teacherId)
+                              );
+                              const anyGroupSnap = await getDocs(anyGroupQuery);
+                              if (!anyGroupSnap.empty) {
+                                targetGroupId = anyGroupSnap.docs[0].id;
+                              }
+                            }
+
+                            if (targetGroupId) {
+                              const studentRef = doc(db, 'students', user.uid);
+                              const studentSnap = await getDoc(studentRef);
+                              
+                              if (studentSnap.exists()) {
+                                // Only update if they don't have a group yet to avoid overwriting existing enrollment
+                                const currentProfile = studentSnap.data();
+                                if (!currentProfile.groupId) {
+                                  await updateDoc(studentRef, { 
+                                    groupId: targetGroupId,
+                                    gradeId: selectedExam.gradeId 
+                                  });
+                                }
+                              } else {
+                                // Create new profile if it doesn't exist
+                                await setDoc(studentRef, {
+                                  name: user.displayName || 'طالب جديد',
+                                  email: user.email || '',
+                                  phone: '',
+                                  parentPhone: '',
+                                  gradeId: selectedExam.gradeId,
+                                  groupId: targetGroupId,
+                                  createdAt: serverTimestamp()
+                                });
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          console.error("Error linking student:", e);
+                        }
+                      };
+
+                      linkToTeacher();
+
                       let durationInSeconds = Number(selectedExam.duration || 60) * 60;
                       
                       // Calculate remaining time based on server start time if available
@@ -1692,37 +1821,34 @@ export function StudentPortal() {
       <AnimatePresence>
         {isTakingExam && selectedExam && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-white z-[200] overflow-y-auto" dir="rtl">
-            <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
-              <div className="max-w-4xl mx-auto px-6 h-20 flex justify-between items-center">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center font-black transition-colors",
-                      timeLeft && timeLeft < 300 ? "bg-red-50 text-red-600 animate-pulse" : "bg-blue-50 text-blue-600"
-                    )}>
-                      <span className="material-symbols-outlined">timer</span>
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-black text-gray-900 leading-none">{selectedExam.title}</h2>
-                      <p className={cn(
-                        "text-xs font-black mt-1",
-                        timeLeft && timeLeft < 300 ? "text-red-500" : "text-blue-600"
-                      )}>
-                        الوقت المتبقي: {timeLeft !== null ? formatTimeLeft(timeLeft) : '--:--'}
-                      </p>
-                    </div>
+            <header className="bg-white border-b border-gray-100 sticky top-0 z-[100] shadow-sm">
+              <div className="max-w-4xl mx-auto px-6 h-20 flex items-center justify-between" dir="rtl">
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center font-black transition-colors",
+                    timeLeft !== null && timeLeft < 300 ? "bg-red-50 text-red-600 animate-pulse" : "bg-blue-50 text-blue-600"
+                  )}>
+                    <Clock size={24} />
                   </div>
-                  <Button 
-                    onClick={() => {
-                      if(confirm('هل أنت متأكد من إنهاء الاختبار وتسليم الإجابات؟')) {
-                        handleSubmitExam();
-                      }
-                    }} 
-                    className="h-12 px-8 rounded-2xl font-black bg-[#005bbf] shadow-xl shadow-blue-200"
-                  >
-                    إنهاء وتسليم
-                  </Button>
+                  <div>
+                    <h2 className="text-lg font-black text-gray-900 leading-none truncate max-w-[150px] md:max-w-xs">{selectedExam.title}</h2>
+                    <p className={cn(
+                      "text-xs font-black mt-1",
+                      timeLeft !== null && timeLeft < 300 ? "text-red-500" : "text-blue-600"
+                    )}>
+                      {timeLeft !== null ? `الوقت المتبقي: ${formatTimeLeft(timeLeft)}` : 'انتظار بدء الوقت...'}
+                    </p>
+                  </div>
                 </div>
+
+                <Button 
+                  onClick={() => setIsConfirmSubmitOpen(true)} 
+                  disabled={isSubmitting}
+                  className="h-12 px-8 rounded-2xl font-black bg-[#005bbf] shadow-xl shadow-blue-200 flex items-center gap-2"
+                >
+                  {isSubmitting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                  {isSubmitting ? 'جاري التسليم...' : 'إنهاء وتسليم'}
+                </Button>
               </div>
             </header>
 
@@ -1817,6 +1943,39 @@ export function StudentPortal() {
         )}
       </AnimatePresence>
       
+      {/* Confirmation Modal for Submission */}
+      <AnimatePresence>
+        {isConfirmSubmitOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-[#001a41]/60 backdrop-blur-sm z-[500] flex items-center justify-center p-6" dir="rtl">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white rounded-[2.5rem] shadow-2xl max-w-sm w-full p-10 text-center border border-blue-100">
+               <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-600 mx-auto mb-6 shadow-inner">
+                  <span className="material-symbols-outlined text-4xl">info</span>
+               </div>
+               <h3 className="text-xl font-black text-gray-900 mb-2">تأكيد التسليم</h3>
+               <p className="text-gray-500 font-bold mb-8">هل أنت متأكد من إنهاء الاختبار وتسليم جميع إجاباتك الآن؟</p>
+               
+               <div className="flex gap-4">
+                  <button 
+                    onClick={() => setIsConfirmSubmitOpen(false)}
+                    className="flex-1 h-14 rounded-2xl bg-gray-100 text-gray-400 font-black hover:bg-gray-200 transition-all"
+                  >
+                    تراجع
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      setIsConfirmSubmitOpen(false);
+                      await handleSubmitExam();
+                    }}
+                    className="flex-1 h-14 rounded-2xl bg-[#005bbf] text-white font-black shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
+                  >
+                    نعم، تسليم
+                  </button>
+               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Exam Result Overlay */}
       <AnimatePresence>
         {examResult && !isReviewing && (
@@ -1829,7 +1988,11 @@ export function StudentPortal() {
                </div>
 
                <h2 className="text-3xl font-black text-gray-900 mb-2">تم التسليم بنجاح!</h2>
-               <p className="text-gray-400 font-bold mb-10">لقد انتهيت من اختبار: <br/><span className="text-blue-600">{examResult.examTitle}</span></p>
+               <p className="text-gray-400 font-bold mb-2">لقد انتهيت من اختبار: <br/><span className="text-blue-600">{examResult.examTitle}</span></p>
+               <div className="flex items-center justify-center gap-2 text-gray-400 mb-8">
+                  <span className="material-symbols-outlined text-sm">calendar_month</span>
+                  <span className="text-xs font-bold">{formatDateValue(examResult.createdAt)}</span>
+               </div>
 
                <div className="bg-gray-50 rounded-[2.5rem] p-10 mb-10 border border-gray-100 flex flex-col items-center">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-4">الدرجة النهائية المحصلة</p>
@@ -1839,13 +2002,22 @@ export function StudentPortal() {
                   </div>
                </div>
 
-               <div className="flex gap-4">
+               <div className="flex flex-col gap-4">
+                  <button 
+                    onClick={() => {
+                      setIsReviewing(true);
+                    }} 
+                    className="w-full h-16 rounded-2xl bg-emerald-600 text-white font-black text-lg shadow-xl shadow-emerald-200 active:scale-95 transition-all flex items-center justify-center gap-3"
+                  >
+                    <span className="material-symbols-outlined">fact_check</span>
+                    مراجعة وتصحيح إجاباتك
+                  </button>
                   <button 
                     onClick={() => {
                       setExamResult(null);
                       setSelectedExam(null);
                     }} 
-                    className="flex-1 h-16 rounded-2xl bg-[#005bbf] text-white font-black text-lg shadow-xl shadow-blue-200 active:scale-95 transition-all"
+                    className="w-full h-14 rounded-2xl bg-gray-100 text-gray-500 font-bold hover:bg-gray-200 transition-all"
                   >
                     العودة للرئيسية
                   </button>
