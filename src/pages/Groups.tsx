@@ -27,7 +27,8 @@ import {
   XCircle,
   Save,
   ChevronLeft,
-  BookOpen
+  BookOpen,
+  GraduationCap
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -54,10 +55,11 @@ export function Groups() {
 
   const [sessionFormData, setSessionFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    defaultAmount: 50
+    sessionPrice: 50
   });
 
   const [sessionRecords, setSessionRecords] = useState<any[]>([]);
+  const [sessionSearchTerm, setSessionSearchTerm] = useState('');
 
   useEffect(() => {
     const unsubGroups = onSnapshot(collection(db, 'groups'), (snapshot) => {
@@ -95,7 +97,7 @@ export function Groups() {
     );
 
     const unsubSessions = onSnapshot(q, (snapshot) => {
-      setSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupSession)));
     });
 
     return () => unsubSessions();
@@ -125,7 +127,8 @@ export function Groups() {
       studentId: s.id,
       studentName: s.name,
       attended: true,
-      amountPaid: sessionFormData.defaultAmount
+      amountPaid: sessionFormData.sessionPrice,
+      isFullPayment: false
     }));
 
     setSessionRecords(initialRecords);
@@ -139,7 +142,17 @@ export function Groups() {
       const sessionData = {
         groupId: selectedGroup.id,
         date: sessionFormData.date,
-        records: sessionRecords,
+        sessionPrice: Number(sessionFormData.sessionPrice),
+        records: sessionRecords.map(r => {
+          const deficit = r.isFullPayment ? 0 : Math.max(0, Number(sessionFormData.sessionPrice) - Number(r.amountPaid));
+          const change = Math.max(0, Number(r.amountPaid) - Number(sessionFormData.sessionPrice));
+          return {
+            ...r,
+            deficit,
+            change,
+            balance: deficit // Keeping for backward compatibility if needed, or just remove if safe
+          };
+        }),
         createdAt: serverTimestamp()
       };
 
@@ -270,24 +283,104 @@ export function Groups() {
 
           {isAddingSession ? (
             <Card className="p-8 rounded-[3rem] shadow-2xl animate-in slide-in-from-top duration-500">
-              <div className="flex flex-col md:flex-row justify-between gap-6 mb-8">
-                <div className="flex flex-wrap gap-4">
+              <div className="flex flex-col lg:flex-row justify-between gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
                   <div className="space-y-1">
                     <label className="text-xs font-black text-gray-400 pr-2">تاريخ الحصة</label>
                     <input 
                       type="date"
                       value={sessionFormData.date}
                       onChange={e => setSessionFormData({...sessionFormData, date: e.target.value})}
-                      className="h-12 bg-gray-50 rounded-xl px-4 font-bold outline-none"
+                      className="w-full h-12 bg-gray-50 rounded-xl px-4 font-bold outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-gray-400 pr-2">سعر الحصة (ج.م)</label>
+                    <input 
+                      type="number"
+                      value={sessionFormData.sessionPrice}
+                      onChange={e => {
+                        const price = Number(e.target.value);
+                        setSessionFormData({...sessionFormData, sessionPrice: price});
+                        // Update all unpaid records to the new price by default
+                        setSessionRecords(prev => prev.map(r => ({
+                          ...r,
+                          amountPaid: r.amountPaid === sessionFormData.sessionPrice ? price : r.amountPaid
+                        })));
+                      }}
+                      className="w-full h-12 bg-blue-50/50 text-blue-600 rounded-xl px-4 font-black outline-none border-2 border-blue-100/50 focus:border-blue-500"
                     />
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button onClick={saveSession} className="bg-emerald-600 hover:bg-emerald-700 px-8 rounded-xl font-black flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                  <Button onClick={saveSession} className="bg-emerald-600 hover:bg-emerald-700 px-8 h-12 rounded-xl font-black flex items-center gap-2 shadow-lg shadow-emerald-900/20">
                     <Save size={18} />
                     حفظ السجل
                   </Button>
-                  <Button variant="outline" onClick={() => setIsAddingSession(false)} className="rounded-xl font-bold">إلغاء</Button>
+                  <Button variant="outline" onClick={() => setIsAddingSession(false)} className="h-12 rounded-xl font-bold border-gray-100">إلغاء</Button>
+                </div>
+              </div>
+
+              <div className="mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-wrap items-center gap-4">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input 
+                    placeholder="إضافة طالب يدوي للمجموعة..."
+                    className="w-full h-10 bg-white border border-gray-100 rounded-xl pr-10 pl-4 font-bold text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                    value={sessionSearchTerm}
+                    onChange={(e) => setSessionSearchTerm(e.target.value)}
+                  />
+                  {sessionSearchTerm && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-50 max-h-64 overflow-y-auto z-10 p-2">
+                      {students
+                        .filter(s => s.name.toLowerCase().includes(sessionSearchTerm.toLowerCase()) && !sessionRecords.find(r => r.studentId === s.id))
+                        .map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => {
+                              setSessionRecords([...sessionRecords, {
+                                studentId: s.id,
+                                studentName: s.name,
+                                attended: true,
+                                amountPaid: sessionFormData.sessionPrice,
+                                isFullPayment: false
+                              }]);
+                              setSessionSearchTerm('');
+                            }}
+                            className="w-full p-3 text-right hover:bg-blue-50 font-bold text-gray-700 rounded-lg flex items-center justify-between"
+                          >
+                            <span>{s.name}</span>
+                            <Plus size={14} className="text-blue-600" />
+                          </button>
+                        ))
+                      }
+                      
+                      {/* Manual Entry Option */}
+                      <button
+                        onClick={() => {
+                          setSessionRecords([...sessionRecords, {
+                            studentId: `manual_${Date.now()}`,
+                            studentName: sessionSearchTerm,
+                            attended: true,
+                            amountPaid: sessionFormData.sessionPrice,
+                            isManual: true,
+                            isFullPayment: false
+                          }]);
+                          setSessionSearchTerm('');
+                        }}
+                        className="w-full p-4 mt-1 text-right bg-blue-50 hover:bg-blue-100 font-black text-blue-700 rounded-xl flex items-center justify-between border border-blue-100 shadow-sm transition-all"
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-xs opacity-60">إضافة طالب غير مسجل:</span>
+                          <span>{sessionSearchTerm}</span>
+                        </div>
+                        <CheckCircle2 size={18} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-xs font-black text-gray-400">
+                  <Badge className="bg-white border-gray-200 text-gray-500">عدد الطلاب المختارين: {sessionRecords.length}</Badge>
                 </div>
               </div>
 
@@ -295,55 +388,162 @@ export function Groups() {
                 <table className="w-full text-right">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="px-6 py-4 text-sm font-black text-gray-400">اسم الطالب</th>
-                      <th className="px-6 py-4 text-sm font-black text-gray-400 text-center">حضور</th>
-                      <th className="px-6 py-4 text-sm font-black text-gray-400 text-center">المبلغ المدفوع</th>
+                      <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">إجراء</th>
+                      <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">اسم الطالب</th>
+                      <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">حضور</th>
+                      <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">المدفوع</th>
+                      <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">الباقي</th>
+                      <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">العجز</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {sessionRecords.map((record, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/30 transition-colors">
-                        <td className="px-6 py-4 font-bold text-gray-700">{record.studentName}</td>
-                        <td className="px-6 py-4 text-center">
-                          <button 
-                            onClick={() => {
-                              const newRecords = [...sessionRecords];
-                              newRecords[idx].attended = !newRecords[idx].attended;
-                              setSessionRecords(newRecords);
-                            }}
-                            className={cn(
-                              "w-10 h-10 rounded-xl flex items-center justify-center transition-all mx-auto",
-                              record.attended ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
-                            )}
-                          >
-                            {record.attended ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
-                          </button>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="relative inline-block w-32">
-                            <input 
-                              type="number"
-                              value={record.amountPaid}
-                              onChange={e => {
+                    {sessionRecords.map((record, idx) => {
+                      const amountPaid = Number(record.amountPaid) || 0;
+                      const deficit = record.isFullPayment ? 0 : Math.max(0, sessionFormData.sessionPrice - amountPaid);
+                      const change = Math.max(0, amountPaid - sessionFormData.sessionPrice);
+                      
+                      return (
+                        <tr key={idx} className={cn(
+                          "hover:bg-gray-50/30 transition-colors",
+                          record.isFullPayment && record.attended && (sessionFormData.sessionPrice - amountPaid) > 0 && "bg-emerald-50/10"
+                        )}>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => setSessionRecords(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-red-400 hover:text-red-600 transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  const newRecords = [...sessionRecords];
+                                  newRecords[idx].isFullPayment = !newRecords[idx].isFullPayment;
+                                  setSessionRecords(newRecords);
+                                }}
+                                title={record.isFullPayment ? "إلغاء تخفيض" : "اعتبار المبلغ دافع بالكامل"}
+                                className={cn(
+                                  "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
+                                  record.isFullPayment ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/20" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                                )}
+                              >
+                                <CheckCircle2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-gray-700">{record.studentName}</span>
+                                {record.studentId.startsWith('manual_') && (
+                                  <Badge className="bg-amber-50 text-amber-600 border-none text-[8px] px-1 rounded">يدوي</Badge>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-gray-400 font-black">{record.studentId}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button 
+                              onClick={() => {
                                 const newRecords = [...sessionRecords];
-                                newRecords[idx].amountPaid = Number(e.target.value);
+                                newRecords[idx].attended = !newRecords[idx].attended;
+                                // If marked absent, clear the amount paid
+                                if (!newRecords[idx].attended) {
+                                  newRecords[idx].amountPaid = 0;
+                                } else {
+                                  newRecords[idx].amountPaid = sessionFormData.sessionPrice;
+                                }
                                 setSessionRecords(newRecords);
                               }}
-                              className="w-full h-10 bg-gray-100/50 rounded-lg pr-8 text-center font-black outline-none focus:ring-1 focus:ring-emerald-500"
-                            />
-                            <DollarSign className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              className={cn(
+                                "w-10 h-10 rounded-xl flex items-center justify-center transition-all mx-auto shadow-sm",
+                                record.attended ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                              )}
+                            >
+                              {record.attended ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <div className="relative inline-block w-28">
+                              <input 
+                                type="number"
+                                value={record.amountPaid}
+                                disabled={!record.attended}
+                                onChange={e => {
+                                  const newRecords = [...sessionRecords];
+                                  newRecords[idx].amountPaid = e.target.value;
+                                  setSessionRecords(newRecords);
+                                }}
+                                className={cn(
+                                  "w-full h-10 rounded-lg pr-8 text-center font-black outline-none focus:ring-1",
+                                  !record.attended ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-white border border-gray-100 focus:ring-blue-500"
+                                )}
+                              />
+                              <DollarSign className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <Badge className={cn(
+                              "font-black px-3 py-1 rounded-lg min-w-[60px] text-center",
+                              !record.attended || change === 0 ? "bg-gray-50 text-gray-300" : "bg-blue-50 text-blue-600"
+                            )}>
+                              {record.attended && change > 0 ? `${change} ج` : '-'}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <Badge className={cn(
+                              "font-black px-3 py-1 rounded-lg min-w-[60px] text-center",
+                              !record.attended ? "bg-gray-50 text-gray-300" :
+                              deficit === 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600 animate-pulse"
+                            )}>
+                              {record.attended ? `${deficit} ج` : '-'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {sessionRecords.length > 0 && (
                       <tr className="bg-blue-50/30 border-t-2 border-blue-100">
-                        <td className="px-6 py-6 font-black text-blue-900">الإجمالي</td>
-                        <td className="px-6 py-6 text-center font-black text-emerald-600">
-                          حاضر: {sessionRecords.filter(r => r.attended).length}
+                        <td colSpan={2} className="px-6 py-6 font-black text-blue-900 text-lg">الخلاصة الإجمالية</td>
+                        <td className="px-6 py-6 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black text-gray-400">القيمة الإجمالية</span>
+                            <span className="font-black text-gray-600 text-lg">
+                              {(sessionRecords.filter(r => r.attended).length * sessionFormData.sessionPrice)} ج
+                            </span>
+                          </div>
                         </td>
-                        <td className="px-6 py-6 text-center font-black text-blue-600 text-xl">
-                          {sessionRecords.reduce((acc, r) => acc + (r.amountPaid || 0), 0)} ج.م
+                        <td className="px-6 py-6 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black text-emerald-600">التحصيل</span>
+                            <span className="font-black text-emerald-700 text-xl">
+                              {sessionRecords.reduce((acc, r) => acc + (Number(r.amountPaid) || 0), 0)} ج
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-6 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black text-blue-600">الباقي (زيادة)</span>
+                            <span className="font-black text-blue-700 text-xl">
+                              {sessionRecords.reduce((acc, r) => {
+                                if (!r.attended) return acc;
+                                const c = Math.max(0, Number(r.amountPaid) - sessionFormData.sessionPrice);
+                                return acc + c;
+                              }, 0)} ج
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-6 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black text-red-600">العجز (نقص)</span>
+                            <span className="font-black text-red-700 text-xl">
+                              {sessionRecords.reduce((acc, r) => {
+                                if (!r.attended || r.isFullPayment) return acc;
+                                const d = Math.max(0, sessionFormData.sessionPrice - (Number(r.amountPaid) || 0));
+                                return acc + d;
+                              }, 0)} ج
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -378,7 +578,10 @@ export function Groups() {
                           onClick={() => {
                             setSelectedSession(session);
                             setSessionRecords(session.records);
-                            setSessionFormData({ ...sessionFormData, date: session.date });
+                            setSessionFormData({ 
+                              date: session.date, 
+                              sessionPrice: session.sessionPrice || 50 
+                            });
                             setIsAddingSession(true);
                           }}
                           className="w-9 h-9 bg-gray-50 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"
@@ -394,9 +597,15 @@ export function Groups() {
                       </div>
                     </div>
                     <div className="space-y-4">
-                      <div>
-                        <p className="text-sm font-black text-gray-400">تاريخ الحصة</p>
-                        <p className="text-lg font-black text-gray-800">{new Date(session.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-sm font-black text-gray-400">تاريخ الحصة</p>
+                          <p className="text-lg font-black text-gray-800">{new Date(session.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        </div>
+                        <div className="text-left bg-blue-50 px-3 py-1 rounded-lg">
+                           <p className="text-[10px] font-black text-blue-400">سعر الحصة</p>
+                           <p className="text-sm font-black text-blue-700">{session.sessionPrice || 0} ج</p>
+                        </div>
                       </div>
                       <div className="flex justify-between pt-4 border-t border-gray-50">
                         <div className="text-center">
@@ -404,12 +613,28 @@ export function Groups() {
                           <p className="text-sm font-black text-emerald-600">{session.records?.filter((r: any) => r.attended).length || 0}</p>
                         </div>
                         <div className="text-center border-x border-gray-50 px-6">
-                          <p className="text-[10px] font-black text-gray-400 uppercase">الغياب</p>
-                          <p className="text-sm font-black text-red-600">{session.records?.filter((r: any) => !r.attended).length || 0}</p>
+                          <p className="text-[10px] font-black text-gray-400 uppercase">العجز</p>
+                          <p className="text-sm font-black text-red-600">
+                             {session.records?.reduce((acc: number, r: any) => {
+                               if (!r.attended || r.isFullPayment) return acc;
+                               const d = Math.max(0, (session.sessionPrice || 0) - (Number(r.amountPaid) || 0));
+                               return acc + d;
+                             }, 0)}ج
+                          </p>
+                        </div>
+                        <div className="text-center ml-4">
+                          <p className="text-[10px] font-black text-gray-400 uppercase">الباقي</p>
+                          <p className="text-sm font-black text-blue-600">
+                             {session.records?.reduce((acc: number, r: any) => {
+                               if (!r.attended) return acc;
+                               const c = Math.max(0, (Number(r.amountPaid) || 0) - (session.sessionPrice || 0));
+                               return acc + c;
+                             }, 0)}ج
+                          </p>
                         </div>
                         <div className="text-center">
-                          <p className="text-[10px] font-black text-gray-400 uppercase">الإيراد</p>
-                          <p className="text-sm font-black text-blue-600">{session.records?.reduce((acc: number, r: any) => acc + (r.amountPaid || 0), 0)}ج</p>
+                          <p className="text-[10px] font-black text-gray-400 uppercase">التحصيل</p>
+                          <p className="text-sm font-black text-emerald-600">{session.records?.reduce((acc: number, r: any) => acc + (Number(r.amountPaid) || 0), 0)}ج</p>
                         </div>
                       </div>
                     </div>

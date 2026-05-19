@@ -87,11 +87,14 @@ export interface GroupSession {
   id: string;
   groupId: string;
   date: string;
+  sessionPrice: number;
   records: {
     studentId: string;
     studentName: string;
     attended: boolean;
     amountPaid: number;
+    balance?: number;
+    isFullPayment?: boolean;
   }[];
   createdAt: any;
 }
