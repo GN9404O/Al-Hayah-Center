@@ -20,6 +20,7 @@ const navItems = [
   { icon: Calendar, label: 'الجداول', path: '/schedules' },
   { icon: UserSquare2, label: 'المعلمون', path: '/teachers' },
   { icon: Users2, label: 'الطلاب', path: '/students' },
+  { icon: Users, label: 'المجموعات', path: '/groups' },
   { icon: Settings, label: 'الإعدادات', path: '/settings' },
 ];
 

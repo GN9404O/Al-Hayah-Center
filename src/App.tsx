@@ -10,6 +10,7 @@ import { Grades } from './pages/Grades';
 import { Schedules } from './pages/Schedules';
 import { Teachers } from './pages/Teachers';
 import { Students } from './pages/Students';
+import { Groups } from './pages/Groups';
 import { Settings } from './pages/Settings';
 import { Toaster } from 'react-hot-toast';
 
@@ -36,6 +37,7 @@ export default function App() {
                 <Route path="/schedules" element={<Schedules />} />
                 <Route path="/teachers" element={<Teachers />} />
                 <Route path="/students" element={<Students />} />
+                <Route path="/groups" element={<Groups />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
             </Route>

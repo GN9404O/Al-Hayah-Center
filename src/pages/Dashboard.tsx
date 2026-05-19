@@ -68,6 +68,7 @@ const formatTime12h = (time: string) => {
     { name: 'الطلاب', value: stats.students, color: '#3b82f6' },
     { name: 'المعلمون', value: stats.teachers, color: '#f59e0b' },
     { name: 'المراحل', value: stats.grades, color: '#8b5cf6' },
+    { name: 'المجموعات', value: stats.groups, color: '#ec4899' },
     { name: 'الجداول', value: stats.schedules, color: '#10b981' },
   ];
 
@@ -84,11 +85,12 @@ const formatTime12h = (time: string) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {[
           { label: 'إجمالي الطلاب', value: stats.students, icon: Users2, color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'إجمالي المعلمين', value: stats.teachers, icon: UserSquare2, color: 'text-amber-600', bg: 'bg-amber-50' },
           { label: 'المراحل الدراسية', value: stats.grades, icon: GraduationCap, color: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: 'المجموعات', value: stats.groups, icon: Users, color: 'text-pink-600', bg: 'bg-pink-50' },
           { label: 'المواعيد الأسبوعية', value: stats.schedules, icon: Calendar, color: 'text-emerald-600', bg: 'bg-emerald-50' },
         ].map((item, i) => (
           <motion.div

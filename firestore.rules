@@ -116,6 +116,10 @@ service cloud.firestore {
              data.examId is string && data.studentId is string &&
              data.score is number && (data.totalMarks is string || data.totalMarks is number);
     }
+    function isValidGroupSession(data) {
+      return data.keys().hasAll(['groupId', 'date']) &&
+             isValidId(data.groupId) && data.date is string;
+    }
     function isOwnerOfTeacherProfile(teacherId) {
       return isSignedIn() && 
              exists(/databases/$(database)/documents/teachers/$(teacherId)) &&
@@ -199,6 +203,14 @@ service cloud.firestore {
       allow read: if isSignedIn() && (resource.data.studentId == request.auth.uid || isAdmin() || isTeacher());
       allow create: if isSignedIn() && incoming().studentId == request.auth.uid;
       allow update, delete: if isAdmin();
+    }
+
+    // Group Sessions collection
+    match /group_sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidGroupSession(incoming());
+      allow update: if isAdmin() && isValidGroupSession(incoming());
+      allow delete: if isAdmin();
     }
 
     // Settings collection

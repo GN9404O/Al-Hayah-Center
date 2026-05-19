@@ -144,6 +144,29 @@
         "completedAt": { "type": "string", "format": "date-time" }
       }
     },
+    "GroupSession": {
+      "title": "Group Session",
+      "description": "Attendance and payment tracking for a group session",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string" },
+        "date": { "type": "string" },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "studentId": { "type": "string" },
+              "studentName": { "type": "string" },
+              "attended": { "type": "boolean" },
+              "amountPaid": { "type": "number" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["groupId", "date"]
+    },
     "AppSettings": {
       "title": "App Settings",
       "description": "Global application configuration",
@@ -167,6 +190,10 @@
     "exam_results": {
       "schema": "ExamResult",
       "description": "Student results for exams"
+    },
+    "group_sessions": {
+      "schema": "GroupSession",
+      "description": "Attendance and payments records"
     },
     "settings": { "schema": "AppSettings", "description": "Global settings" }
   }

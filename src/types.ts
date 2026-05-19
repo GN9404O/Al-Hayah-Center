@@ -82,3 +82,16 @@ export interface Student {
   notes?: string;
   createdAt: any;
 }
+
+export interface GroupSession {
+  id: string;
+  groupId: string;
+  date: string;
+  records: {
+    studentId: string;
+    studentName: string;
+    attended: boolean;
+    amountPaid: number;
+  }[];
+  createdAt: any;
+}
