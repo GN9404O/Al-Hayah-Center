@@ -9,8 +9,10 @@ import {
   query, 
   where,
   serverTimestamp,
+  getDocs,
   orderBy
 } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { Group, Grade, Teacher, Student, GroupSession } from '../types';
 import { Card, Badge, Button, cn } from '../components/ui';
@@ -21,6 +23,7 @@ import {
   Search, 
   Filter, 
   ArrowRight, 
+  ArrowLeft,
   Calendar, 
   DollarSign, 
   CheckCircle2, 
@@ -33,6 +36,7 @@ import {
 import { toast } from 'react-hot-toast';
 
 export function Groups() {
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<Group[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -40,10 +44,33 @@ export function Groups() {
   const [sessions, setSessions] = useState<GroupSession[]>([]);
   
   const [loading, setLoading] = useState(true);
+  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+  const [selectedGrade, setSelectedGrade] = useState<Grade | null>(null);
+
+  // Sync selected teacher with updated data from Firestore
+  useEffect(() => {
+    if (selectedTeacher) {
+      const updated = teachers.find(t => t.id === selectedTeacher.id);
+      if (updated) setSelectedTeacher(updated);
+    }
+  }, [teachers]);
+
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [isAddingSession, setIsAddingSession] = useState(false);
   const [selectedSession, setSelectedSession] = useState<GroupSession | null>(null);
+
+  useEffect(() => {
+    if (isAddingGroup) {
+      setFormData(prev => ({
+        ...prev,
+        teacherId: selectedTeacher?.id || prev.teacherId,
+        gradeId: selectedGrade?.id || prev.gradeId,
+        subject: selectedTeacher?.subject || prev.subject,
+        name: prev.name || (selectedGrade ? selectedGrade.name : '')
+      }));
+    }
+  }, [isAddingGroup, selectedTeacher, selectedGrade]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -171,14 +198,130 @@ export function Groups() {
     }
   };
 
-  const deleteSession = async (id: string) => {
-    if (confirm('هل أنت متأكد من حذف هذا السجل؟')) {
-      try {
-        await deleteDoc(doc(db, 'group_sessions', id));
-        toast.success('تم حذف السجل');
-      } catch (error) {
-        toast.error('خطأ في الحذف');
-      }
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onResolve: (result: boolean) => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onResolve: () => {},
+  });
+
+  const confirmAction = (title: string, message: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setConfirmDialog({
+        isOpen: true,
+        title,
+        message,
+        onResolve: (result) => {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(result);
+        }
+      });
+    });
+  };
+
+  const deleteGroup = async (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (!id) return false;
+
+    const confirmed = await confirmAction(
+      'حذف المجموعة',
+      'هل أنت متأكد من حذف هذه المجموعة؟ سيتم حذف جميع الحصص المرتبطة بها وجميع بيانات التحصيل.'
+    );
+
+    if (!confirmed) return false;
+
+    try {
+      // 1. Delete all sessions for this group
+      const q = query(collection(db, 'group_sessions'), where('groupId', '==', id));
+      const sessionsSnapshot = await getDocs(q);
+      const sessionDeletes = sessionsSnapshot.docs.map(sessionDoc => deleteDoc(sessionDoc.ref));
+      await Promise.all(sessionDeletes);
+
+      // 2. Clear groupId for all students in this group
+      const studentsInGroup = students.filter(s => s.groupId === id);
+      const studentUpdates = studentsInGroup.map(student => 
+        updateDoc(doc(db, 'students', student.id), { groupId: '' })
+      );
+      await Promise.all(studentUpdates);
+
+      // 3. Delete the group document
+      await deleteDoc(doc(db, 'groups', id));
+      
+      toast.success('تم حذف المجموعة وجميع بياناتها بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Delete group error:', error);
+      toast.error('حدث خطأ أثناء حذف المجموعة من قاعدة البيانات');
+      return false;
+    }
+  };
+
+  const deleteSession = async (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (!id) return false;
+
+    const confirmed = await confirmAction(
+      'حذف سجل الحصة',
+      'هل أنت متأكد من حذف هذا السجل بشكل نهائي؟ لا يمكن التراجع عن هذه الخطوة.'
+    );
+
+    if (!confirmed) return false;
+
+    try {
+      await deleteDoc(doc(db, 'group_sessions', id));
+      toast.success('تم حذف السجل بنجاح من قاعدة البيانات');
+      return true;
+    } catch (error) {
+      console.error('Delete session error:', error);
+      toast.error('حدث خطأ أثناء حذف السجل من قاعدة البيانات');
+      return false;
+    }
+  };
+
+  const removeStudentFromGroup = async (studentId: string, studentName: string) => {
+    const confirmed = await confirmAction(
+      'حذف طالب من المجموعة',
+      `هل أنت متأكد من حذف ${studentName} من هذه المجموعة؟`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await updateDoc(doc(db, 'students', studentId), { groupId: '' });
+      toast.success('تم حذف الطالب من المجموعة');
+    } catch (error) {
+      console.error('Remove student error:', error);
+      toast.error('خطأ في حذف الطالب');
+    }
+  };
+
+  const assignGradeToTeacher = async (gradeId: string) => {
+    if (!selectedTeacher) return;
+    try {
+      const currentGradeIds = selectedTeacher.gradeIds || [];
+      if (currentGradeIds.includes(gradeId)) return;
+      
+      const newGradeIds = [...currentGradeIds, gradeId];
+      await updateDoc(doc(db, 'teachers', selectedTeacher.id), {
+        gradeIds: newGradeIds,
+        updatedAt: serverTimestamp()
+      });
+      toast.success('تمت إضافة المرحلة للمدرس');
+    } catch (e) {
+      toast.error('خطأ في تحديث مراحل المدرس');
     }
   };
 
@@ -221,10 +364,25 @@ export function Groups() {
               <select
                 required
                 value={formData.gradeId}
-                onChange={e => setFormData({ ...formData, gradeId: e.target.value })}
-                className="w-full h-14 bg-gray-50 rounded-2xl px-6 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                onChange={e => {
+                  const gradeId = e.target.value;
+                  const gradeName = grades.find(g => g.id === gradeId)?.name || '';
+                  // Only auto-fill name if it's currently empty or was previously a grade name
+                  const isCurrentNameAGrade = !formData.name || grades.some(g => g.name === formData.name);
+                  setFormData({ 
+                    ...formData, 
+                    gradeId, 
+                    name: isCurrentNameAGrade ? gradeName : formData.name 
+                  });
+                }}
+                className="w-full h-14 bg-gray-50 rounded-2xl px-6 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               >
                 <option value="">اختر المرحلة</option>
+                {grades.length === 0 && (
+                  <option disabled className="text-red-500">
+                    لا يوجد مراحل! اذهب لصفحة "المراحل" لإضافتها
+                  </option>
+                )}
                 {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </div>
@@ -233,10 +391,19 @@ export function Groups() {
               <select
                 required
                 value={formData.teacherId}
-                onChange={e => setFormData({ ...formData, teacherId: e.target.value })}
-                className="w-full h-14 bg-gray-50 rounded-2xl px-6 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                onChange={e => {
+                  const teacherId = e.target.value;
+                  const teacher = teachers.find(t => t.id === teacherId);
+                  setFormData({ 
+                    ...formData, 
+                    teacherId,
+                    subject: teacher?.subject || formData.subject
+                  });
+                }}
+                className="w-full h-14 bg-gray-50 rounded-2xl px-6 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               >
                 <option value="">اختر المعلم</option>
+                {teachers.length === 0 && <option disabled>لا يوجد معلمون مسجلون</option>}
                 {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
@@ -268,16 +435,33 @@ export function Groups() {
       {selectedGroup ? (
         <div className="space-y-8">
           <div className="flex items-center justify-between">
-            <button 
-              onClick={() => { setSelectedGroup(null); setIsAddingSession(false); setSelectedSession(null); }}
-              className="flex items-center gap-2 text-gray-500 hover:text-blue-600 font-bold transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5 rotate-180" />
-              العودة للمجموعات
-            </button>
-            <div className="text-left font-black">
-              <h2 className="text-2xl text-gray-900">{selectedGroup.name}</h2>
-              <p className="text-blue-600">{getGradeName(selectedGroup.gradeId)} - {selectedGroup.subject}</p>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => { setSelectedGroup(null); setIsAddingSession(false); setSelectedSession(null); }}
+                className="w-10 h-10 bg-white border border-gray-100 rounded-xl flex items-center justify-center text-gray-500 hover:text-blue-600 transition-all shadow-sm"
+              >
+                <ChevronLeft className="w-5 h-5 rotate-180" />
+              </button>
+              <div className="text-right font-black">
+                <h2 className="text-2xl text-gray-900">{selectedGroup.name}</h2>
+                <p className="text-blue-600">{getGradeName(selectedGroup.gradeId)} - {selectedGroup.subject}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="outline"
+                type="button"
+                onClick={async (e) => {
+                  const deleted = await deleteGroup(selectedGroup.id, e);
+                  if (deleted) {
+                    setSelectedGroup(null);
+                  }
+                }}
+                className="border-red-100 text-red-600 hover:bg-red-50 rounded-xl font-bold h-11"
+              >
+                <Trash2 size={18} className="ml-2" />
+                حذف المجموعة
+              </Button>
             </div>
           </div>
 
@@ -313,6 +497,23 @@ export function Groups() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {selectedSession && (
+                    <Button 
+                      variant="outline" 
+                      type="button"
+                      onClick={async (e) => {
+                        const deleted = await deleteSession(selectedSession.id, e);
+                        if (deleted) {
+                          setIsAddingSession(false);
+                          setSelectedSession(null);
+                        }
+                      }} 
+                      className="h-12 rounded-xl font-bold border-red-100 text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 size={18} className="ml-2" />
+                      حذف الحصة
+                    </Button>
+                  )}
                   <Button onClick={saveSession} className="bg-emerald-600 hover:bg-emerald-700 px-8 h-12 rounded-xl font-black flex items-center gap-2 shadow-lg shadow-emerald-900/20">
                     <Save size={18} />
                     حفظ السجل
@@ -410,12 +611,22 @@ export function Groups() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <button 
-                                onClick={() => setSessionRecords(prev => prev.filter((_, i) => i !== idx))}
-                                className="text-red-400 hover:text-red-600 transition-colors"
+                                type="button"
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const confirmed = await confirmAction('حذف من الحصة', 'هل أنت متأكد من حذف هذا الطالب من سجل الحصة؟');
+                                  if (confirmed) {
+                                    setSessionRecords(prev => prev.filter((_, i) => i !== idx));
+                                  }
+                                }}
+                                className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all relative z-10"
+                                title="حذف من الحصة"
                               >
                                 <Trash2 size={16} />
                               </button>
                               <button 
+                                type="button"
                                 onClick={() => {
                                   const newRecords = [...sessionRecords];
                                   newRecords[idx].isFullPayment = !newRecords[idx].isFullPayment;
@@ -484,17 +695,17 @@ export function Groups() {
                           </td>
                           <td className="px-6 py-4 text-center">
                             <Badge className={cn(
-                              "font-black px-3 py-1 rounded-lg min-w-[60px] text-center",
-                              !record.attended || change === 0 ? "bg-gray-50 text-gray-300" : "bg-blue-50 text-blue-600"
+                                "font-black px-3 py-1 rounded-lg min-w-[60px] text-center",
+                                !record.attended || change === 0 ? "bg-gray-50 text-gray-300" : "bg-blue-50 text-blue-600"
                             )}>
                               {record.attended && change > 0 ? `${change} ج` : '-'}
                             </Badge>
                           </td>
                           <td className="px-6 py-4 text-center">
                             <Badge className={cn(
-                              "font-black px-3 py-1 rounded-lg min-w-[60px] text-center",
-                              !record.attended ? "bg-gray-50 text-gray-300" :
-                              deficit === 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600 animate-pulse"
+                                "font-black px-3 py-1 rounded-lg min-w-[60px] text-center",
+                                !record.attended ? "bg-gray-50 text-gray-300" :
+                                deficit === 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600 animate-pulse"
                             )}>
                               {record.attended ? `${deficit} ج` : '-'}
                             </Badge>
@@ -573,28 +784,34 @@ export function Groups() {
                       <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-[1rem] flex items-center justify-center">
                         <Calendar size={24} />
                       </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => {
-                            setSelectedSession(session);
-                            setSessionRecords(session.records);
-                            setSessionFormData({ 
-                              date: session.date, 
-                              sessionPrice: session.sessionPrice || 50 
-                            });
-                            setIsAddingSession(true);
-                          }}
-                          className="w-9 h-9 bg-gray-50 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"
-                        >
-                          <Users size={16} />
-                        </button>
-                        <button 
-                          onClick={() => deleteSession(session.id)}
-                          className="w-9 h-9 bg-gray-50 text-red-600 rounded-lg flex items-center justify-center hover:bg-red-600 hover:text-white transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                        <div className="flex gap-2">
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSelectedSession(session);
+                              setSessionRecords(session.records);
+                              setSessionFormData({ 
+                                date: session.date, 
+                                sessionPrice: session.sessionPrice || 50 
+                              });
+                              setIsAddingSession(true);
+                            }}
+                            className="w-9 h-9 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"
+                            title="عرض الحضور"
+                          >
+                            <Users size={16} />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => deleteSession(session.id, e)}
+                            className="w-9 h-9 bg-red-50 text-red-600 rounded-lg flex items-center justify-center hover:bg-red-600 hover:text-white transition-all shadow-sm relative z-10"
+                            title="حذف الحصة"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                     </div>
                     <div className="space-y-4">
                       <div className="flex justify-between items-end">
@@ -649,50 +866,270 @@ export function Groups() {
               </div>
             </div>
           )}
+
+          <div className="pt-10 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-gray-800">الطلاب المسجلين في المجموعة</h3>
+              <Badge className="bg-gray-100 text-gray-500 font-black">{students.filter(s => s.groupId === selectedGroup.id).length} طالب</Badge>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {students.filter(s => s.groupId === selectedGroup.id).map(student => (
+                <div key={student.id} className="p-4 bg-white rounded-2xl border border-gray-50 flex items-center justify-between group hover:border-blue-100 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
+                      {student.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-800 text-sm">{student.name}</p>
+                      <p className="text-[10px] text-gray-400 font-black">{student.phone}</p>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => removeStudentFromGroup(student.id, student.name)}
+                    className="w-8 h-8 md:opacity-0 group-hover:opacity-100 bg-red-50 text-red-600 rounded-lg flex items-center justify-center hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+      ) : selectedTeacher ? (
+        selectedGrade ? (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSelectedGrade(null)}
+                  className="w-12 h-12 rounded-2xl border-gray-100 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all"
+                >
+                  <ArrowRight size={20} />
+                </Button>
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900">{selectedGrade.name}</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge className="bg-blue-600 text-white border-none font-black">{selectedTeacher.name}</Badge>
+                  </div>
+                </div>
+              </div>
+              <Button 
+                onClick={() => setIsAddingGroup(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-xl font-black gap-2 shadow-lg shadow-emerald-900/10"
+              >
+                <Plus size={18} />
+                إضافة حصة/مجموعة
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {groups
+                .filter(g => g.teacherId === selectedTeacher.id && g.gradeId === selectedGrade.id)
+                .map((group) => (
+                  <Card 
+                    key={group.id} 
+                    className="p-8 rounded-[2.5rem] shadow-sm border border-gray-50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col space-y-4 group cursor-pointer bg-white"
+                    onClick={() => setSelectedGroup(group)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all">
+                        <BookOpen size={28} />
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={(e) => deleteGroup(group.id, e)}
+                        className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all relative z-10"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                    <div>
+                      <h4 className="text-2xl font-black text-gray-900 mb-1">{group.name}</h4>
+                      <Badge className="bg-purple-50 text-purple-600 border-none font-black">{group.subject}</Badge>
+                    </div>
+                    <div className="pt-4 border-t border-gray-50 mt-auto flex items-center justify-end">
+                      <div className="text-blue-600 group-hover:translate-x-2 transition-transform">
+                        <ArrowLeft size={20} />
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              {groups.filter(g => g.teacherId === selectedTeacher.id && g.gradeId === selectedGrade.id).length === 0 && (
+                <div className="col-span-full py-20 flex flex-col items-center justify-center text-gray-300">
+                  <p className="font-bold italic">لا يوجد مجموعات لهذا المدرس في هذه المرحلة</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSelectedTeacher(null)}
+                  className="w-12 h-12 rounded-2xl border-gray-100 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all"
+                >
+                  <ArrowRight size={20} />
+                </Button>
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900">{selectedTeacher.name}</h2>
+                  <p className="text-blue-600 font-bold">اختر المرحلة الدراسية</p>
+                </div>
+              </div>
+              <Button 
+                onClick={() => setIsAddingGroup(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl font-black gap-2 shadow-lg shadow-blue-900/10"
+              >
+                <Plus size={18} />
+                مجموعة جديدة للمدرس
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {grades.length === 0 ? (
+                <Card className="col-span-full p-12 bg-blue-50 border-2 border-dashed border-blue-200 flex flex-col items-center justify-center text-center">
+                  <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mb-6">
+                    <GraduationCap size={44} />
+                  </div>
+                  <h3 className="text-2xl font-black text-blue-900 mb-2">تنبيه: المراحل لم يتم تفعيلها بعد</h3>
+                  <p className="text-blue-700 font-bold mb-8 max-w-sm">
+                    المراحل الدراسية موجودة كقوالب في الموقع، لكن يجب عليك "تفعيلها" من صفحة المراحل لتتمكن من استخدامها في المجموعات.
+                  </p>
+                  <Button 
+                    onClick={() => navigate('/grades')}
+                    className="bg-blue-600 text-white rounded-2xl h-14 px-10 font-black text-lg shadow-lg shadow-blue-200"
+                  >
+                    اذهب لتفعيل المراحل الآن
+                  </Button>
+                </Card>
+              ) : (
+                <>
+                  {grades
+                    .filter(grade => (selectedTeacher.gradeIds || []).includes(grade.id) || groups.some(g => g.teacherId === selectedTeacher.id && g.gradeId === grade.id))
+                    .map((grade) => {
+                      const gradeGroups = groups.filter(g => g.teacherId === selectedTeacher.id && g.gradeId === grade.id);
+                      return (
+                        <Card 
+                          key={grade.id} 
+                          className={cn(
+                            "p-8 rounded-[2.5rem] shadow-sm border-none hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer bg-white text-center",
+                            gradeGroups.length === 0 && "opacity-60 grayscale hover:grayscale-0 hover:opacity-100"
+                          )}
+                          onClick={() => setSelectedGrade(grade)}
+                        >
+                          <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-[2rem] mx-auto mb-4 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">
+                            <GraduationCap size={40} />
+                          </div>
+                          <h3 className="text-xl font-black text-gray-900">{grade.name}</h3>
+                          <p className="text-sm text-gray-400 font-bold mt-2">
+                            {gradeGroups.length} مجموعات
+                          </p>
+                          {gradeGroups.length === 0 && (
+                            <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-center gap-1 text-blue-600 text-xs font-black">
+                              <Plus size={12} />
+                              إنشاء أول مجموعة
+                            </div>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  
+                  {/* Add Grade Section */}
+                  {grades.filter(g => !(selectedTeacher.gradeIds || []).includes(g.id)).length > 0 && (
+                    <div className="col-span-full mt-12 bg-gray-50/50 p-8 rounded-[3rem] border border-dashed border-gray-200">
+                       <div className="flex items-center gap-2 mb-6">
+                          <Plus className="text-blue-600" size={24} />
+                          <h4 className="text-lg font-black text-gray-800">إضافة مراحل أخرى لهذا المدرس</h4>
+                       </div>
+                       <div className="flex flex-wrap gap-3">
+                          {grades
+                            .filter(g => !(selectedTeacher.gradeIds || []).includes(g.id))
+                            .map(g => (
+                               <button
+                                  key={g.id}
+                                  onClick={() => assignGradeToTeacher(g.id)}
+                                  className="px-6 py-3 bg-white text-gray-600 border border-gray-100 rounded-2xl font-bold text-sm hover:bg-blue-600 hover:text-white hover:border-blue-600 hover:shadow-lg hover:shadow-blue-200 transition-all flex items-center gap-2 group/btn"
+                               >
+                                  <Plus size={16} className="text-blue-500 group-hover/btn:text-white" />
+                                  {g.name}
+                               </button>
+                            ))
+                          }
+                       </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {groups.map((group) => (
+          {teachers.map((teacher) => (
             <Card 
-              key={group.id} 
-              className="p-8 rounded-[3rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.06)] border-none hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col space-y-6 group cursor-pointer"
-              onClick={() => setSelectedGroup(group)}
+              key={teacher.id} 
+              className="p-8 rounded-[3rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.06)] border-none hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 flex items-center gap-6 group cursor-pointer bg-white"
+              onClick={() => setSelectedTeacher(teacher)}
             >
-              <div className="flex justify-between items-start">
-                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-all">
-                  <BookOpen size={30} />
-                </div>
-                <div className="text-left font-black opacity-40 text-xs">
-                  {students.filter(s => s.groupId === group.id).length} طالب
-                </div>
+              <div className="w-24 h-24 bg-blue-50 text-blue-600 rounded-[3rem] flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">
+                <Users size={44} />
               </div>
-              
-              <div>
-                <h3 className="text-2xl font-black text-gray-900 mb-2 leading-tight">{group.name}</h3>
+              <div className="flex-1">
+                <h3 className="text-2xl font-black text-gray-900 mb-1 leading-tight">{teacher.name}</h3>
                 <div className="flex flex-wrap gap-2">
-                  <Badge className="bg-blue-50 text-blue-600 border-none font-black">{getGradeName(group.gradeId)}</Badge>
-                  <Badge className="bg-purple-50 text-purple-600 border-none font-black">{group.subject}</Badge>
+                   <Badge className="bg-blue-50 text-blue-600 border-none font-black">{teacher.subject}</Badge>
+                   <Badge className="bg-gray-50 text-gray-400 border-none font-black text-[10px]">
+                     {groups.filter(g => g.teacherId === teacher.id).length} مجموعات
+                   </Badge>
                 </div>
               </div>
-
-              <div className="pt-6 border-t border-gray-50 mt-auto flex items-center justify-between">
-                <div className="flex items-center gap-2 text-gray-400 font-bold text-sm">
-                  <GraduationCap size={16} />
-                  <span>{getTeacherName(group.teacherId)}</span>
-                </div>
-                <div className="text-blue-600 group-hover:translate-x-2 transition-transform">
-                  <ArrowRight size={20} />
-                </div>
+              <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all">
+                <ArrowLeft size={24} />
               </div>
             </Card>
           ))}
-          
-          {groups.length === 0 && (
+          {teachers.length === 0 && (
             <div className="col-span-full py-40 flex flex-col items-center justify-center text-gray-300">
-               <span className="material-symbols-outlined text-9xl mb-8 opacity-10">groups</span>
-               <p className="text-2xl font-black opacity-30 italic">لا يوجد مجموعات حالياً</p>
+               <span className="material-symbols-outlined text-9xl mb-8 opacity-10">person_off</span>
+               <p className="text-2xl font-black opacity-30 italic">لا يوجد معلمين مسجلين</p>
             </div>
           )}
+        </div>
+      )}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-300"
+            onClick={() => confirmDialog.onResolve(false)}
+          />
+          <Card className="relative w-full max-w-sm p-8 rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-300 border-none">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                <Trash2 size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-gray-900">{confirmDialog.title}</h3>
+              <p className="text-gray-500 font-bold leading-relaxed">{confirmDialog.message}</p>
+              <div className="flex gap-3 pt-4">
+                <Button 
+                  onClick={() => confirmDialog.onResolve(true)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black h-12 rounded-xl"
+                >
+                  تأكيد الحذف
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => confirmDialog.onResolve(false)}
+                  className="flex-1 border-gray-100 font-bold h-12 rounded-xl"
+                >
+                  إلغاء
+                </Button>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>

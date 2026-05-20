@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Teacher, Grade } from '../types';
 import { ACADEMIC_STAGES } from '../constants';
 import { Button, Input, Card, cn } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { Plus, Edit2, Trash2, UserSquare2, Loader2, Phone, BookOpen, ImageIcon, Check, Filter, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, UserSquare2, Loader2, Phone, BookOpen, ImageIcon, Check, Filter, ChevronDown, GraduationCap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 
 export function Teachers() {
+  const navigate = useNavigate();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -374,22 +376,12 @@ export function Teachers() {
                   {teacher.gradeIds && teacher.gradeIds.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {teacher.gradeIds.map(gid => {
-                        let gName = '';
-                        for (const stage of ACADEMIC_STAGES) {
-                          const g = stage.grades.find(grade => grade.id === gid);
-                          if (g) {
-                            gName = g.name;
-                            break;
-                          }
-                        }
-                        
-                        if (!gName) {
-                          gName = grades.find(g => g.id === gid)?.name || gid;
-                        }
+                        const g = grades.find(grade => grade.id === gid);
+                        if (!g) return null;
 
                         return (
-                          <span key={gid} className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md">
-                            {gName}
+                          <span key={gid} className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md">
+                            {g.name}
                           </span>
                         );
                       })}
@@ -495,54 +487,43 @@ export function Teachers() {
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-bold text-gray-700">الصفوف الدراسية</label>
-            <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-              {ACADEMIC_STAGES.map(stage => (
-                <div key={stage.id} className="space-y-2">
-                  <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{stage.name}</h5>
-                  <div className="flex flex-wrap gap-2">
-                    {stage.grades.map(grade => (
-                      <button
-                        key={grade.id}
-                        type="button"
-                        onClick={() => toggleGrade(grade.id)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                          formData.gradeIds.includes(grade.id)
-                            ? 'bg-[#1a73e8] text-white shadow-md'
-                            : 'bg-white text-gray-500 border border-gray-200'
-                        }`}
-                      >
-                        {formData.gradeIds.includes(grade.id) && <Check className="w-3 h-3" />}
-                        {grade.name}
-                      </button>
-                    ))}
-                  </div>
+            <label className="block text-sm font-bold text-gray-700">المراحل الدراسية التي يدرسها هذا المعلم</label>
+            {grades.length === 0 ? (
+              <div className="p-8 text-center bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-100 flex flex-col items-center">
+                <GraduationCap className="text-blue-200 mb-2" size={32} />
+                <p className="text-blue-700 font-bold text-sm mb-2">لم يتم تفعيل أي مراحل دراسية في النظام بعد</p>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => navigate('/grades')}
+                  className="text-blue-600 border-blue-200 hover:bg-blue-100 rounded-xl px-6"
+                >
+                  تفعيل المراحل الآن
+                </Button>
+              </div>
+            ) : (
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <p className="text-[10px] font-black text-gray-400 mb-4 uppercase tracking-widest">اختر المراحل المتاحة:</p>
+                <div className="flex flex-wrap gap-2">
+                  {grades.map(grade => (
+                    <button
+                      key={grade.id}
+                      type="button"
+                      onClick={() => toggleGrade(grade.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border",
+                        formData.gradeIds.includes(grade.id)
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200'
+                          : 'bg-white text-gray-600 border-gray-100 hover:border-blue-200'
+                      )}
+                    >
+                      {formData.gradeIds.includes(grade.id) && <Check className="w-3 h-3" />}
+                      {grade.name}
+                    </button>
+                  ))}
                 </div>
-              ))}
-              
-              {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-gray-200">
-                  <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">صفوف مخصصة</h5>
-                  <div className="flex flex-wrap gap-2">
-                    {grades.filter(g => !ACADEMIC_STAGES.some(s => s.id === g.id)).map(grade => (
-                      <button
-                        key={grade.id}
-                        type="button"
-                        onClick={() => toggleGrade(grade.id)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                          formData.gradeIds.includes(grade.id)
-                            ? 'bg-gray-800 text-white shadow-md'
-                            : 'bg-white text-gray-500 border border-gray-200'
-                        }`}
-                      >
-                        {formData.gradeIds.includes(grade.id) && <Check className="w-3 h-3" />}
-                        {grade.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">

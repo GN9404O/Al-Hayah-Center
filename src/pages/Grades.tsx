@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Grade } from '../types';
-import { Button, Input, Card } from '../components/ui';
+import { ACADEMIC_STAGES } from '../lib/constants';
+import { Button, Input, Card, cn } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { Plus, Edit2, Trash2, GraduationCap, Loader2 } from 'lucide-react';
@@ -92,6 +93,45 @@ export function Grades() {
     }
   };
 
+  const addStandardGrade = async (name: string) => {
+    try {
+      if (grades.some(g => g.name === name)) {
+        toast.error('هذه المرحلة موجودة بالفعل');
+        return;
+      }
+      await addDoc(collection(db, 'grades'), {
+        name,
+        createdAt: serverTimestamp(),
+      });
+      toast.success(`تم إضافة ${name} بنجاح`);
+    } catch (error) {
+      toast.error('حدث خطأ أثناء الإضافة');
+    }
+  };
+
+  const setupAllStandardGrades = async () => {
+    const allSubGrades = ACADEMIC_STAGES.flatMap(s => s.subGrades);
+    const missingGrades = allSubGrades.filter(name => !grades.some(g => g.name === name));
+    
+    if (missingGrades.length === 0) {
+      toast.success('تم إضافة جميع المراحل بالفعل');
+      return;
+    }
+
+    const t = toast.loading('جاري إضافة المراحل...');
+    try {
+      await Promise.all(missingGrades.map(name => 
+        addDoc(collection(db, 'grades'), {
+          name,
+          createdAt: serverTimestamp(),
+        })
+      ));
+      toast.success(`تم إضافة ${missingGrades.length} مرحلة بنجاح`, { id: t });
+    } catch (error) {
+      toast.error('حدث خطأ أثناء الإضافة الجماعية', { id: t });
+    }
+  };
+
   const handleDelete = async () => {
     if (!currentGrade) return;
     try {
@@ -121,29 +161,6 @@ export function Grades() {
     setFormData({ name: '' });
   };
 
-  const ACADEMIC_STAGES = [
-    {
-      id: 'kindergarten',
-      name: 'رياض الأطفال',
-      subGrades: ['كي جي 1', 'كي جي 2']
-    },
-    {
-      id: 'primary',
-      name: 'المرحلة الابتدائية',
-      subGrades: ['الصف الأول الابتدائي', 'الصف الثاني الابتدائي', 'الصف الثالث الابتدائي', 'الصف الرابع الابتدائي', 'الصف الخامس الابتدائي', 'الصف السادس الابتدائي']
-    },
-    {
-      id: 'preparatory',
-      name: 'المرحلة الإعدادية',
-      subGrades: ['الصف الأول الإعدادي', 'الصف الثاني الإعدادي', 'الصف الثالث الإعدادي']
-    },
-    {
-      id: 'secondary',
-      name: 'المرحلة الثانوية',
-      subGrades: ['الصف الأول الثانوي', 'الصف الثاني الثانوي', 'الصف الثالث الثانوي']
-    }
-  ];
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -154,10 +171,31 @@ export function Grades() {
 
   return (
     <div className="space-y-10 pb-20">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900">المراحل الدراسية</h1>
-          <p className="text-gray-500">إدارة المراحل التعليمية في المركز</p>
+      <div className="mb-12">
+        <h1 className="text-2xl font-black text-gray-900">المراحل الدراسية</h1>
+        <p className="text-gray-500">اختر من المراحل الجاهزة أدناه لتفعيلها في النظام، أو أضف مرحلة مخصصة</p>
+      </div>
+
+      {grades.length === 0 && (
+        <Card className="mb-12 p-8 border-2 border-dashed border-blue-200 bg-blue-50/50 flex flex-col items-center text-center">
+          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mb-4">
+            <GraduationCap size={32} />
+          </div>
+          <h3 className="text-xl font-black text-blue-900 mb-2">ابدأ بإعداد النظام</h3>
+          <p className="text-blue-700 font-bold mb-6 max-w-md">لم يتم تفعيل أي مراحل دراسية بعد. يمكنك الضغط على الزر أدناه لتفعيل جميع الصفوف الدراسية الأساسية بضغطة واحدة.</p>
+          <Button 
+            onClick={setupAllStandardGrades}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 h-14 rounded-2xl font-black text-lg shadow-xl shadow-blue-200"
+          >
+            تفعيل جميع المراحل الأساسية الآن
+          </Button>
+        </Card>
+      )}
+
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-8 bg-blue-600 rounded-full" />
+          <h2 className="text-xl font-black text-gray-800">قائمة المراحل المتاحة</h2>
         </div>
         <Button onClick={() => openModal()} className="gap-2 rounded-xl">
           <Plus className="w-5 h-5" />
@@ -185,11 +223,25 @@ export function Grades() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {stage.subGrades.map((sub, idx) => (
-                    <span key={idx} className="bg-white px-3 py-1 rounded-lg text-xs font-medium text-gray-600 border border-blue-50">
-                      {sub}
-                    </span>
-                  ))}
+                  {stage.subGrades.map((sub, idx) => {
+                    const isAdded = grades.some(g => g.name === sub);
+                    return (
+                      <button 
+                        key={idx} 
+                        onClick={() => !isAdded && addStandardGrade(sub)}
+                        disabled={isAdded}
+                        className={cn(
+                          "px-3 py-1 rounded-lg text-xs font-bold transition-all",
+                          isAdded 
+                            ? "bg-emerald-50 text-emerald-600 border border-emerald-100 cursor-default" 
+                            : "bg-white text-gray-600 border border-blue-50 hover:border-blue-500 hover:text-blue-600 shadow-sm"
+                        )}
+                      >
+                        {sub}
+                        {!isAdded && <Plus size={10} className="inline-block mr-1 opacity-50" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </Card>
